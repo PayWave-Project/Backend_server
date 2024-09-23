@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Password Reset Successful</title>
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .container {
+            max-width: 400px;
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 15px 25px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            animation: slideDown 0.5s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                transform: translateY(-30px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+            color: #1a377a;
+        }
+
+        p {
+            color: #666;
+            line-height: 1.6;
+            margin: 10px 0;
+            font-size: 15px;
+        }
+
+        .success-icon {
+            margin-bottom: 20px;
+        }
+
+        .success-icon img {
+            width: 90%;
+            height: auto;
+        }
+
+        .btn {
+            display: inline-block;
+            background: linear-gradient(135deg, #1ca3e4, #1a377a);
+            color: #fff;
+            padding: 12px 25px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 14px;
+            border-radius: 50px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="success-icon">
+            <img src="https://res.cloudinary.com/dx6qmw7w9/image/upload/v1726437304/ezgif.com-video-to-gif-converter_5_ul1grn.gif" alt="Success Icon">
+        </div>
+        <h1>Password Reset Successful!</h1>
+        <p>Your password has been successfully reset. You can now log in with your new password.</p>
+        <p>If you did not initiate this action, please contact support immediately.</p>
+        <a href="#" class="btn">Proceed to Login</a>
+    </div>
+
+    <script>
+        setTimeout(() => {
+            window.location.href = "#"; // Change to your login page URL
+        }, 5000)
+    </script>
+</body>
+
+</html>

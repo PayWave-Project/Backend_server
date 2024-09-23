@@ -1,0 +1,688 @@
+const merchantModel = require("../models/merchantModel");
+const axios = require("axios");
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+const sendEmail = require("../utils/email");
+const { generateDynamicEmail } = require("../utils/emailText");
+const verifiedHTML = require("../utils/verified");
+const resetSuccessfulHTML = require("../utils/resetSuccessful");
+const { resetFunc } = require("../utils/forgot");
+const { 
+  validateMerchant,
+  validateResetPassword,
+} = require("../middleware/validator");
+const { hashPassword, hashBVN, hashCAC } = require("../utils/hashUtilis");
+const { verifyCACWithKoraPay, verifyBVNWithKoraPay } = require("../apis/koraApi");
+const { generateLoginNotificationEmail } = require("../utils/sendLogin Email");
+const { generateUnlockNotificationEmail } = require("../utils/UnlockNotificationEmail ");
+const moment = require("moment");
+const path = require('path');
+const fs = require('fs').promises;
+
+
+const KORAPAY_API_URL = process.env.KORAPAY_API_URL;
+const KORAPAY_SECRET_KEY = process.env.KORAPAY_SECRET_KEY;
+
+const generateOTP = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+async function createVirtualAccount(merchantDetail, merchantID) {
+    try {
+      const response = await axios.post(
+        `${KORAPAY_API_URL}/virtual-bank-account`,
+        {
+          account_name: merchantDetail.businessName,
+          account_reference: merchantID,
+          permanent: true,
+          bank_code: "000",
+          customer: {
+            name: merchantDetail.businessName,
+            email: merchantDetail.email,
+          },
+          kyc: {
+            bvn: merchantDetail.BVN,
+          },
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${KORAPAY_SECRET_KEY}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      return response.data.data;
+    } catch (error) {
+      console.error('Error creating virtual account:', error);
+      throw new Error('Failed to create virtual account');
+    }
+  }
+  
+// Function to Register a new merchant on the platform
+exports.registerMerchant = async (req, res) => {
+  try {
+    const validationResult = validateMerchant(req.body);
+
+    if (!validationResult.success) {
+      const errors = validationResult.error.errors.map((err) => ({
+        field: err.path.join("."),
+        message: err.message,
+      }));
+      return res.status(400).json({
+        message: "Validation errors occurred",
+        errors,
+      });
+    }
+   
+
+    const merchantDetail = {
+      firstName: req.body.firstName.toLowerCase().trim(),
+      lastName: req.body.lastName.toLowerCase().trim(),
+      email: req.body.email.toLowerCase().trim(),
+      businessName: req.body.businessName.toLowerCase().trim(),
+      phoneNumber: req.body.phoneNumber.trim(),
+      password: req.body.password,
+    };
+   
+    if (!merchantDetail) {
+      return res.status(400).json({ message: "Please fill all field below!" });
+    }
+
+
+    const emailExist = await merchantModel.findOne({
+      email: merchantDetail.email.toLowerCase().trim(),
+    });
+    if (emailExist)
+      return res.status(200).json({ message: "Email already exists!" });
+
+
+
+  // Hash password and sensitive information
+  const hashedPassword = await hashPassword(merchantDetail.password)
+
+   const merchantID = `payWave-${Date.now()}`
+
+ // Generate OTP
+ const otp = generateOTP();
+  // OTP expires in 15 minutes
+ const otpExpiry = new Date(Date.now() + 15 * 60 * 1000)
+
+    const merchant = new merchantModel({
+      firstName: merchantDetail.firstName.trim(),
+      lastName: merchantDetail.lastName.trim(),
+      email: merchantDetail.email.trim(),
+      businessName: merchantDetail.businessName.trim(),
+      phoneNumber: merchantDetail.phoneNumber.trim(),
+      merchantId: merchantID,
+      password: hashedPassword,
+      otp: otp,
+      otpExpiry: otpExpiry,
+      isVerified: false,
+    
+    });
+
+    const token = jwt.sign(
+      {
+        userId: merchant._id,
+      },
+      process.env.SECRET,
+      { expiresIn: "900s" }
+    );
+    merchant.token = token;
+    const subject = "Email Verification";
+
+    // const otp = `${req.protocol}://${req.get("host")}/api/v1/verify-merchant/${merchant._id}/${merchant.token}`;
+    const html = generateDynamicEmail(merchant.firstName, otp);
+    try {
+      await sendEmail({
+        email: merchant.email,
+        html,
+        subject,
+      });
+    } catch (emailError) {
+      console.error("Error sending email:", emailError);
+      return res.status(500).json({
+        message: "Account created, but failed to send verification email. Please contact support.",
+        error: emailError.message
+      });
+    }
+    await merchant.save();
+    return res.status(201).json({
+      message: "Successfully created an account on PayWave!, Please log in to your mail and verify your account",
+      data: {
+        ...merchant.toObject(),
+        password: undefined, 
+        otp: undefined, 
+        otpAttempts: undefined,
+            
+    }
+});
+  } catch (error) {
+    return res.status(500).json({
+      message: "Internal Server Error: ",
+      error: error.message,
+      API_Error: error.response?.data || "No additional error details from API",
+    });
+  }
+};
+
+//Function to verify a new merchant via a otp
+exports.verify = async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    const { otp } = req.body;
+
+    const merchant = await merchantModel.findById(id);
+    if (!merchant) {
+      return res.status(404).json({ message: "Merchant not found" });
+    }
+    
+    console.log(`Stored OTP: ${merchant.otp}, type: ${typeof merchant.otp}`);
+    console.log(`OTP Expiry: ${merchant.otpExpiry}, Current time: ${new Date()}`);
+
+    if (merchant.isVerified) {
+      return res.status(400).json({ message: "Merchant is already verified." });
+    }
+      
+    // Check if the merchant is blocked
+    if (merchant.blockedUntil) {
+      if (moment().isBefore(merchant.blockedUntil)) {
+        const remainingTime = moment.duration(moment(merchant.blockedUntil).diff(moment()));
+        return res.status(403).json({
+          message: `Account is blocked. Please try again in ${remainingTime.asMinutes().toFixed(0)} minutes.`
+        });
+      } else {
+        // The block period has passed, reset the block and generate new OTP
+        const newOTP = generateOTP();
+        const otpExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes from now
+
+        await merchantModel.findByIdAndUpdate(id, {
+          blockedUntil: null,
+          otpAttempts: 0,
+          otp: newOTP,
+          otpExpiry: otpExpiry
+        });
+
+        // Send unlock email with new OTP
+        const subject = "Your account has been unlocked";
+        const html = generateUnlockNotificationEmail(merchant.firstName, newOTP);
+        await sendEmail({
+          email: merchant.email,
+          html,
+          subject,
+        });
+
+        return res.status(200).json({ message: "Your account has been unlocked. A new OTP has been sent to your email." });
+      }
+    }
+
+    
+    // Initialize attempts if not present
+    if (!merchant.otpAttempts) {
+      merchant.otpAttempts = 0;
+    }
+
+  // Check if the OTP has expired
+  if (!merchant.otpExpiry || new Date() > merchant.otpExpiry) {
+    // Reset OTP fields
+    await merchantModel.findByIdAndUpdate(id, {
+      otp: null,
+      otpExpiry: null,
+      otpAttempts: 0
+    });
+    return res.status(400).json({ 
+      message: "OTP has expired. Please request a new OTP.",
+      expired: true
+    });
+  }
+
+      // Check if the OTP is valid
+      if (merchant.otp !== otp) {
+        console.log(`OTP mismatch. Stored: ${merchant.otp}, Received: ${otp}`);
+        merchant.otpAttempts += 1;
+        
+       
+      //   await merchantModel.findByIdAndUpdate(
+      //     id,
+      //     { otp: null, otpExpiry: null, otpAttempts: 0 },
+      //     { new: true }
+      //   );
+      //   return res.status(400).json({ message: "Maximum attempts reached. Please request a new OTP." });
+      // }
+
+     
+     if (merchant.otpAttempts >= 3) {
+        // Block the account for 1 hour
+        const blockedUntil = moment().add(1, 'hour').toDate();
+        await merchantModel.findByIdAndUpdate(id, {
+          otp: null,
+          otpExpiry: null,
+          otpAttempts: 0,
+          blockedUntil: blockedUntil
+        });
+        return res.status(403).json({ message: "Maximum attempts reached. Your account is blocked for 1 hour." });
+      }
+
+
+      await merchant.save();
+      return res.status(400).json({ 
+        message: "Invalid OTP",
+        attemptsRemaining: 3 - merchant.otpAttempts
+      });
+    }
+
+    console.log('OTP validated successfully');
+
+    // OTP is valid, verify the merchant and reset OTP-related fields
+    const updatedMerchant = await merchantModel.findByIdAndUpdate(
+      id,
+      {
+        isVerified: true,
+        otp: null,
+        otpExpiry: null,
+        otpAttempts: 0,
+        status: "verified"  
+      },
+      { new: true }
+    );
+
+    if (!updatedMerchant) {
+      return res.status(500).json({ message: "Failed to update merchant verification status" });
+    }
+
+    return res.status(200).json({
+      message: "Merchant successfully verified"
+    });
+  } catch (error) {
+    console.error('Error in verify function:', error);
+    return res.status(500).json({
+      message: "Internal Server Error: ",
+      error: error.message,
+    });
+  }
+}
+
+
+
+exports.resendOTP = async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    const merchant = await merchantModel.findById(id);
+    if (!merchant) {
+      return res.status(404).json({ message: "Merchant not found" });
+    }
+
+    if (merchant.isVerified) {
+      return res.status(400).json({ message: "Merchant is already verified." });
+    }
+
+    // Generate new OTP and set 15 minutes from now
+
+    const newOTP = generateOTP();
+    const otpExpiry = new Date(Date.now() + 15 * 60 * 1000); 
+    // Update merchant with new OTP
+    await merchantModel.findByIdAndUpdate(id, {
+      otp: newOTP,
+      otpExpiry: otpExpiry,
+      otpAttempts: 0
+    });
+
+    // Send email with new OTP
+    const subject = "New OTP for Email Verification";
+    const html = generateDynamicEmail(merchant.firstName, newOTP);
+    
+    await sendEmail({
+      email: merchant.email,
+      html,
+      subject,
+    });
+
+    return res.status(200).json({
+      message: "New OTP has been sent to your email."
+    });
+
+  } catch (error) {
+    console.error('Error in resendOTP function:', error);
+    return res.status(500).json({
+      message: "Internal Server Error: ",
+      error: error.message,
+    });
+  }
+}
+
+//Function to login a verified Merchant account
+exports.logIn = async (req, res) => {
+  try {
+    const merchantData = {
+      email: req.body.email,
+      password: req.body.password,
+    };
+
+    if (!merchantData)
+      return res
+        .status(400)
+        .json({ message: "Please fill all the field below!" });
+
+    const checkEmail = await merchantModel.findOne({
+      email: merchantData.email.toLowerCase(),
+    });
+    if (!checkEmail) {
+      return res.status(404).json({
+        message: "Merchant not registered",
+      });
+    }
+    const checkPassword = bcrypt.compareSync(
+      merchantData.password,
+      checkEmail.password
+    );
+    if (!checkPassword) {
+      return res.status(404).json({
+        message: "Password is incorrect",
+      });
+    }
+    const token = jwt.sign(
+      {
+        userId: checkEmail._id,
+      },
+      process.env.SECRET,
+      { expiresIn: "20h" }
+    );
+
+    checkEmail.token = token;
+    await checkEmail.save();
+  
+    const loginTime = new Date().toLocaleString();
+    console.log(`Successful login: ${checkEmail.email} (${checkEmail.businessName}) at ${loginTime}`);
+
+ 
+    // Send login notification email
+   
+    await sendEmail({
+      email: checkEmail.email,
+      html: generateLoginNotificationEmail  (checkEmail.firstName, loginTime),
+      subject: "Login Notification",
+    });
+
+    const details = {
+      firstName: checkEmail.firstName,
+      email: checkEmail.email,
+      businessName: checkEmail.businessName,
+      phoneNumber: checkEmail.phoneNumber,
+      userId: checkEmail._id,
+    };
+
+    if (checkEmail.status === "verified") {
+      return res.status(200).json({
+        message: "Login Successfully! Welcome " + checkEmail.businessName,
+        token: token,
+        merchant: details,
+      });
+    } else {
+      return res.status(400).json({
+        message:
+          "Sorry Merchant not verified yet. Check your mail to verify your account!",
+      });
+    }
+  } catch (error) {
+    return res.status(500).json({
+      message: "Internal Server Error: ",
+      error: error.message,
+    });
+  }
+};
+
+//Function for the Merchant, incase password is forgotten
+exports.forgotPassword = async (req, res) => {
+  try {
+    const email = req.body.email;
+    if (!email) {
+      return res.status(400).json({
+        message: "Please enter your email address!",
+      });
+    }
+    const merchant = await merchantModel.findOne({
+      email: email.toLowerCase(),
+    });
+    if (!merchant) {
+      return res.status(404).json({
+        message: "Email does not exist",
+      });
+    } else {
+      const subject = "Kindly reset your password";
+      const otp = `${req.protocol}://${req.get(
+        "host"
+      )}/api/v1/reset-password/${merchant._id}`;
+      const html = resetFunc(merchant.email, otp);
+      sendEmail({
+        email: merchant.email,
+        html,
+        subject,
+      });
+      return res.status(200).json({
+        message: "Kindly check your email to reset your password",
+      });
+    }
+  } catch (error) {
+    return res.status(500).json({
+      message: "Internal Server Error: ",
+      error: error.message,
+    });
+  }
+};
+
+// Function to reset the Merchant password
+exports.resetPassword = async (req, res) => {
+  try {
+    const validationResult = validateResetPassword(req.body);
+    if (!validationResult.success) {
+      const errors = validationResult.error.errors.map((err) => ({
+        field: err.path.join("."),
+        message: err.message,
+      }));
+      return res.status(400).json({
+        message: "Validation errors occurred",
+        errors,
+      });
+    }
+
+    // Extract userId from request parameters and passwords from request body
+    const id = req.params.id;
+    const { password, confirmPassword } = req.body;
+
+    // Check if password or confirmPassword are empty
+    if (!password || !confirmPassword) {
+      return res.status(400).json({
+        message: "Password and Confirm Password cannot be empty",
+      });
+    }
+
+    // Find the Merchant by Id
+    const merchant = await merchantModel.findById(id);
+    if (!merchant) {
+      return res.status(404).json({
+        message: "Merchant Company not found",
+      });
+    }
+
+    // Check if password and confirmPassword match
+    if (password !== confirmPassword) {
+      return res.status(400).json({
+        message: "Passwords do not match",
+      });
+    }
+
+    // If the Merchant already has a password, check if the new password is the same as the old password
+    if (merchant.password && bcrypt.compareSync(password, merchant.password)) {
+      return res.status(400).json({
+        message: "Can't use previous password!",
+      });
+    }
+
+    // Generate a salt and hash the new password
+    // const salt = bcrypt.genSaltSync(12);
+    // const hashPassword = bcrypt.hashSync(password, salt);
+
+    // Update the Merchant password with the new hashed password
+    const updateMerchant = await merchantModel.findByIdAndUpdate(
+      id,
+      { password: hashPassword },
+      { new: true }
+    );
+
+    // Send a successful reset response
+    return res.send(resetSuccessfulHTML(req));
+  } catch (error) {
+    return res.status(500).json({
+      message: "Internal Server Error: ",
+      error: error.message,
+    });
+  }
+};
+
+// Function to signOut a Merchant
+exports.signOut = async (req, res) => {
+  try {
+    const id = req.user.userId;
+    const merchant = await merchantModel.findById(id);
+    if (!merchant) {
+      return res.status(404).json({
+        message: "Merchant not found",
+      });
+    }
+
+    merchant.token = null;
+    await merchant.save();
+    return res.status(201).json({
+      message: `${merchant.businessName} has been signed out successfully`,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Internal Server Error: ",
+      error: error.message,
+    });
+  }
+};
+
+
+
+// Get a user 
+
+exports.getUser = async (req, res) => {
+  try {
+    const id = req.user.userId;
+    const merchant = await merchantModel.findById(id);
+    if (!merchant) {
+      return res.status(404).json({
+        message: "Merchant not found",
+      });
+    }
+
+    return res.status(200).json({
+      merchant: merchant,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Internal Server Error: ",
+      error: error.message,
+    });
+  }
+};
+
+
+// get all users
+exports.getAllMerchants = async (req, res) => {
+    try {
+      const merchants = await merchantModel.find();
+      
+      if (merchants.length === 0) {
+        return res.status(404).json({
+          message: "No merchants found",
+        });
+      }
+      
+      return res.status(200).json({
+        message: `${merchants.length} merchant(s) found`,
+        data: merchants
+      });
+    } catch (error) {
+      console.error("Error in getAllMerchants:", error);
+      return res.status(500).json({
+        message: "Internal Server Error",
+        error: error.message,
+      });
+    }
+  };
+
+
+  
+//Endpoint to upload a Merchant profile photo
+exports.uploaAPhoto = async (req, res) => {
+  try {
+      const userId = req.user.userId;
+
+      const merchant = await merchantModel.findById(userId);
+      if (!merchant) {
+          return res.status(404).json({
+              message: "Merchant not found"
+          });
+      };
+
+      // Upload image to Cloudinary if available
+      if (!req.file) {
+          return res.status(400).json({
+              message: "No file was uploaded"
+          });
+      }
+
+      // Path to the uploaded file
+      const imageFilePath = path.resolve(req.file.path);
+
+      // Check if the file exists before proceeding
+      if (!fs.existsSync(imageFilePath)) {
+          return res.status(400).json({
+              message: "Uploaded image not found"
+          });
+      }
+
+      // Upload the image to Cloudinary
+      let fileUploader;
+      try {
+          fileUploader = await uploadLogoToCloudinary(imageFilePath, merchant);
+          await fs.promises.unlink(imageFilePath);
+      } catch (uploadError) {
+          return res.status(500).json({ message: 'Error uploading profile photo ' + uploadError.message });
+      }
+
+      if (fileUploader) {
+          const merchantPicture = {
+              public_id: fileUploader.public_id,
+              url: fileUploader.secure_url
+          };
+
+          const uploadedPhoto = await merchantModel.findByIdAndUpdate(userId, { merchantPicture: merchantPicture }, { new: true });
+          if (!uploadedPhoto) {
+              return res.status(400).json({
+                  message: "Unable to upload user photo!"
+              })
+          }
+
+          return res.status(200).json({
+              message: 'Photo successfully uploaded!',
+              profilePicture: uploadedPhoto.merchantPicture
+          });
+      } else {
+          return res.status(500).json({ message: 'Failed to upload logo image' });
+      }
+
+  } catch (error) {
+      return res.status(500).json({
+          message: "Internal server error: " + error.message
+      });
+  } finally {
+      if (fs.existsSync(req.file.path)) {
+          fs.unlinkSync(path.resolve(req.file.path));
+      }
+  }
+};
