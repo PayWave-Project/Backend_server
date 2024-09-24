@@ -501,16 +501,15 @@ exports.forgotPassword = async (req, res) => {
 // Function to verify the OTP for Merchants to reset password
 exports.verifyOTP = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { otp } = req.body;
+    const { email, otp } = req.body;
 
-    if ( !otp) {
+    if ( !email || !otp) {
       return res.status(400).json({
-        message: "OTP are required!",
+        message: "Email and OTP are required!",
       });
     }
 
-    const merchant = await merchantModel.findById(id);
+    const merchant = await merchantModel.findOne({ email: email.toLowerCase()});
     if (!merchant) {
       return res.status(404).json({
         message: "Merchant not found",
@@ -570,10 +569,10 @@ exports.verifyOTP = async (req, res) => {
 // Function to resend OTP for password reset
 exports.resendOTPforResetPassword = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { email } = req.body;
 
     // Find the merchant by email
-    const merchant = await merchantModel.findById(id);
+    const merchant = await merchantModel.findOne({ email: email.toLowerCase()});
     if (!merchant) {
       return res.status(404).json({ message: "Merchant not found" });
     }
@@ -627,18 +626,17 @@ exports.resetPassword = async (req, res) => {
     }
 
     // Extract userId from request parameters and passwords from request body
-    const id = req.params.id;
-    const { password, confirmPassword } = req.body;
+    const { email, password, confirmPassword } = req.body;
 
     // Check if password or confirmPassword are empty
-    if (!password || !confirmPassword) {
+    if (!email || !password || !confirmPassword) {
       return res.status(400).json({
-        message: "Password and Confirm Password cannot be empty",
+        message: "Email, Password and Confirm Password cannot be empty",
       });
     }
 
-    // Find the Merchant by Id
-    const merchant = await merchantModel.findById(id);
+    // Find the Merchant by email
+    const merchant = await merchantModel.findOne({ email: email.toLowerCase()});
     if (!merchant) {
       return res.status(404).json({ message: "Merchant Company not found" });
     }

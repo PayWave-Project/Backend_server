@@ -32,6 +32,7 @@ const validateResetPassword = (data) => {
     try {
         // Zod schema for password validation
         const validateSchema = z.object({
+            email: z.string().email({ message: "Please provide a valid email address" }).nonempty({ message: "Email is required" }),
             password: z.string()
                 .min(8, { message: "Password must be at least 8 characters long" })
                 .max(20, { message: "Password must not exceed 20 characters" })
