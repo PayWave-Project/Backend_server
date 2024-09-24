@@ -4,8 +4,11 @@ require('dotenv').config();
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const app = express();
+const webhookRouter = require('./routers/webhookRouter');
 const paymentRouter = require('./routers/paymentRouter');
 const merchantRouter = require('./routers/merchantRouter');
+const paymentService = require('./routers/paymentLogicRouter');
+const withdrawRouter = require('./routers/withdrawRouter');
 
 
 const corsOptions = {
@@ -16,29 +19,23 @@ const corsOptions = {
 // Middleware for CORS
 app.use(cors(corsOptions));
 
-// Middleware to parse raw body for the koraPay webhook
-app.use('/api/v1/webhook', express.raw({ type: 'application/json' })); // Correctly set content type
-
-// Middleware to add raw body to req object
-app.use('/api/v1/webhook', (req, res, next) => {
-    if (req.headers['x-korapay-signature']) {
-        req.rawBody = req.body; // Use raw body for signature verification
-    }
-    next();
-});
-
 // Middleware for parsing JSON and URL-encoded data
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: true })); 
 
 // Define routes
 app.get('/', (req, res) => {
-    res.send("Welcome to Pay Wave NQR API 🎉🎉🎉");
+    res.send("Welcome to PayWave NQR API 🎉🎉🎉");
 });
+
+// Use the webhook router
+app.use('/api/v1', webhookRouter); 
 
 // Routes
 app.use('/api/v1', paymentRouter);
 app.use('/api/v1', merchantRouter);
+app.use('/api/v1', paymentService);
+app.use('/api/v1', withdrawRouter);
 
 
 // Add error handling middleware for JSON parsing errors
