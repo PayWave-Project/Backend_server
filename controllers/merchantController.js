@@ -422,7 +422,7 @@ exports.logIn = async (req, res) => {
     });
 
     // If login is successful
-    const { password: _, ...merchantWithoutPassword } = checkEmail.toObject();
+    const { password: _, otpExpiry, otpAttempts, ...merchantWithoutPassword } = checkEmail.toObject();
 
     if (checkEmail.status === "verified") {
       return res.status(200).json({
