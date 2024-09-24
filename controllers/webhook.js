@@ -25,6 +25,12 @@ exports.webhook = async (req, res) => {
       .update(JSON.stringify(req.body.data))
       .digest("hex");
 
+      console.log("Req Body Data:", req.body.data);
+      console.log("Korapay Secret Key:", KORAPAY_SECRET_KEY);
+      console.log("Expected Hash:", hash);
+      console.log("Received Signature:", korapaySignature);
+
+
     // Compare the computed hash with the signature from the headers
     if (hash !== korapaySignature) {
       console.error("Invalid signature:", { expected: hash, received: korapaySignature });
