@@ -43,6 +43,10 @@ const merchantSchema = new Schema({
         type: Number,
         default: 0
     },
+    isOtpVerified: { 
+        type: Boolean, 
+        default: false 
+    },
     // BVN: {
     //     type: String,
     //     required: true,
