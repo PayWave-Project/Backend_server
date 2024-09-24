@@ -482,8 +482,12 @@ exports.forgotPassword = async (req, res) => {
 
       await merchant.save();
 
+    // Return the merchant data, excluding sensitive fields
+    const { password: ignoredPassword, otp: ignoredOtp, otpExpiry: ignoredOtpExpiry, otpAttempts: ignoredOtpAttempts, ...merchantData } = merchant.toObject();
+
       return res.status(200).json({
         message: "Kindly check your email for an OTP to reset your password",
+        data: merchantData
       });
     }
   } catch (error) {

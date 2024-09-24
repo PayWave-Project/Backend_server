@@ -264,6 +264,8 @@ exports.bankTransferPay = async (req, res) => {
   try {
     const { amount, bankCode, accountNumber, email } = req.body;
 
+    let transferPayload;
+
     if (bankCode) {
       // Validate that bankCode exists in your local database
       const banksCode = await bankCodeModel.findOne({ code: bankCode });
@@ -277,10 +279,10 @@ exports.bankTransferPay = async (req, res) => {
         return res
           .status(400)
           .json({ message: "Invalid bank account details" });
-      }
-    }
+      } 
+
     // Create the payload for the bank transfer
-    const transferPayload = {
+    transferPayload = {
       amount,
       bank_code: banksCode.code || "",
       account_number: accountNumber || "",
@@ -296,6 +298,9 @@ exports.bankTransferPay = async (req, res) => {
         purpose: "Payment via bank transfer",
       },
     };
+
+    return transferPayload;
+  }
 
     // Send the bank transfer request to Korapay
     const response = await axios.post(
