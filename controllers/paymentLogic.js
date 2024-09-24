@@ -259,13 +259,28 @@ const verifyBankAccount = async (bankCode, accountNumber) => {
   }
 };
 
+
 // Function for pay with bank transfer without checkout
 exports.bankTransferPay = async (req, res) => {
   try {
     const { amount, bankCode, accountNumber, email } = req.body;
 
-    let transferPayload;
+    let transferPayload = {
+      amount,
+      account_name: "Demo account" || "",
+      currency: "NGN",
+      reference: `PYW_bank_${Date.now()}`,
+      merchant_bears_cost: false,
+      customer: {
+        email: email,
+        name: "Demo account",
+      },
+      metadata: {
+        purpose: "Payment via bank transfer",
+      },
+    };
 
+    // Check if bankCode is provided
     if (bankCode) {
       // Validate that bankCode exists in your local database
       const banksCode = await bankCodeModel.findOne({ code: bankCode });
@@ -273,34 +288,20 @@ exports.bankTransferPay = async (req, res) => {
         return res.status(400).json({ message: "Invalid bank code" });
       }
 
-      // Verify the bank account
-      const verifiedAccount = await verifyBankAccount(bankCode, accountNumber);
-      if (!verifiedAccount) {
-        return res
-          .status(400)
-          .json({ message: "Invalid bank account details" });
-      } 
+      // Check if accountNumber is provided
+      if (accountNumber) {
+        // Verify the bank account if accountNumber is also provided
+        const verifiedAccount = await verifyBankAccount(bankCode, accountNumber);
+        if (!verifiedAccount) {
+          return res.status(400).json({ message: "Invalid bank account details" });
+        }
 
-    // Create the payload for the bank transfer
-    transferPayload = {
-      amount,
-      bank_code: banksCode.code || "",
-      account_number: accountNumber || "",
-      account_name: "Demo account" || "",
-      currency: "NGN",
-      reference: `PYW_bank_${Date.now()}`,
-      merchant_bears_cost: false,
-      customer: {
-        email: email,
-        name: verifiedAccount.account_name || "",
-      },
-      metadata: {
-        purpose: "Payment via bank transfer",
-      },
-    };
-
-    return transferPayload;
-  }
+        // Add bank code and account number to transfer payload
+        transferPayload.bank_code = banksCode.code;
+        transferPayload.account_number = accountNumber;
+        transferPayload.account_name = verifiedAccount.account_name || "Demo account"; // Use the verified account name
+      }
+    }
 
     // Send the bank transfer request to Korapay
     const response = await axios.post(
