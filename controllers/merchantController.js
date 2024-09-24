@@ -7,17 +7,15 @@ const { generateDynamicEmail } = require("../utils/emailText");
 const verifiedHTML = require("../utils/verified");
 const resetSuccessfulHTML = require("../utils/resetSuccessful");
 const { resetFunc } = require("../utils/forgot");
-const { 
-  validateMerchant,
-  validateResetPassword,
-} = require("../middleware/validator");
+const {  validateMerchant, validateResetPassword, } = require("../middleware/validator");
 const { hashPassword, hashBVN, hashCAC } = require("../utils/hashUtilis");
 const { verifyCACWithKoraPay, verifyBVNWithKoraPay } = require("../apis/koraApi");
 const { generateLoginNotificationEmail } = require("../utils/sendLogin Email");
 const { generateUnlockNotificationEmail } = require("../utils/UnlockNotificationEmail ");
 const moment = require("moment");
+const cloudinary = require("../middleware/cloudinary");
 const path = require('path');
-const fs = require('fs').promises;
+const fs = require('fs');
 
 
 const KORAPAY_API_URL = process.env.KORAPAY_API_URL;
@@ -615,6 +613,26 @@ exports.getAllMerchants = async (req, res) => {
     }
   };
 
+
+
+// Function to upload a merchant photo
+const uploadLogoToCloudinary = async (merchantPicture, merchant) => {
+    try {
+        if (merchant.merchantPicture && merchant.merchantPicture.public_id) {
+            return await cloudinary.uploader.upload(merchantPicture, {
+                public_id: merchant.merchantPicture.public_id,
+                overwrite: true
+            });
+        } else {
+            return await cloudinary.uploader.upload(merchantPicture, {
+                public_id: `merchantPic_${merchant._id}_${Date.now()}`,
+                folder: "Merchant-Images"
+            });
+        }
+    } catch (error) {
+        throw new Error("Error uploading photo to Cloudinary: " + error.message);
+    }
+};
 
   
 //Endpoint to upload a Merchant profile photo

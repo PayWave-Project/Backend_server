@@ -8,7 +8,7 @@ const { upload } = require('../middleware/multer');
 router.post('/register-merchant', registerMerchant);
 
 //endpoint to verify a registered merchant
-router.get('/verify-merchant/:id', verify)
+router.post('/verify-merchant/:id', verify)
 
 // endpoint to resend otp
 router.post('/resend-otp/:id',resendOTP);
