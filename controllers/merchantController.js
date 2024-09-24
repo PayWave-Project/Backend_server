@@ -665,14 +665,14 @@ exports.resetPassword = async (req, res) => {
 
     // Update the Merchant password with the new hashed password
     const updateMerchant = await merchantModel.findByIdAndUpdate(
-      id,
+      merchant._id,
       { password: hashPassword },
       { new: true }
     );
 
     // Send a successful reset response
     // return res.send(resetSuccessfulHTML(req));
-    return res.status(200).json({ message: "Password reset successful!"});
+    return res.status(200).json({ message: "Password reset successful!" });
   } catch (error) {
     return res.status(500).json({
       message: "Internal Server Error: ",
