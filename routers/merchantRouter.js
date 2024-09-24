@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { registerMerchant, verify, logIn, forgotPassword, resetPassword, signOut, resendOTP, uploaAPhoto, } = require('../controllers/merchantController');
+const { registerMerchant, verify, logIn, forgotPassword, resetPassword, signOut, resendOTP, uploaAPhoto, verifyOTP, resendOTPforResetPassword, } = require('../controllers/merchantController');
 const { authenticate, Admin, } = require('../middleware/authentication');
 const { upload } = require('../middleware/multer');
 
@@ -16,11 +16,18 @@ router.post('/resend-otp/:id',resendOTP);
 //endpoint to login with email
 router.post("/login-merchant", logIn);
 
+//endpoint for forgot password
+router.post("/forgot-password", forgotPassword);
+
+//endpoint to verifyOTP for password reset
+router.post("/verify-otp/:id", verifyOTP);
+
+//endpoint to resend OTP for Reset Password
+router.get("/resend-password-otp/:id", resendOTPforResetPassword);
+
 //endpoint to reset user Password
 router.put('/reset-password/:id', resetPassword);
 
-//endpoint for forgot password
-router.post("/forgot-password", forgotPassword);
 //endpoint to upload a profile photo
 router.put('/upload-logo', upload.single('merchantPicture'), authenticate,  uploaAPhoto);
 
