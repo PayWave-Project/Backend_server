@@ -20,13 +20,13 @@ router.post("/login-merchant", logIn);
 router.post("/forgot-password", forgotPassword);
 
 //endpoint to verifyOTP for password reset
-router.post("/verify-otp/:id", verifyOTP);
+router.post("/verify-otp", verifyOTP);
 
 //endpoint to resend OTP for Reset Password
-router.get("/resend-password-otp/:id", resendOTPforResetPassword);
+router.post("/resend-password-otp", resendOTPforResetPassword);
 
 //endpoint to reset user Password
-router.put('/reset-password/:id', resetPassword);
+router.put('/reset-password', resetPassword);
 
 //endpoint to upload a profile photo
 router.put('/upload-logo', upload.single('merchantPicture'), authenticate,  uploaAPhoto);
