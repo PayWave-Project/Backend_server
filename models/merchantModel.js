@@ -63,6 +63,10 @@ const merchantSchema = new Schema({
         lowercase: true,
         default: "not-verified"
     },
+    isVerified: {
+        type: Boolean,
+        default: false
+    },
     bankAccountDetails: {
         accountName: {
             type: String,
