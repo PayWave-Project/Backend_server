@@ -31,10 +31,9 @@ exports.webhook = async (req, res) => {
     console.log("Received Signature:", korapaySignature);
 
     // Compare the computed hash with the signature from the headers
-    if (hash !== korapaySignature) {
+    if (hash === korapaySignature) {
       console.error("Invalid signature:", { expected: hash, received: korapaySignature });
       // return res.status(400).send({ error: "Invalid signature" });
-    }
 
     // Parse the event
     const event = req.body;
@@ -48,7 +47,7 @@ exports.webhook = async (req, res) => {
       (existingEventW && existingEventW.status === event.data.status)
     ) {
       console.log(`Event with reference ${event.data.reference} already processed.`);
-      // return res.status(200).json({ message: "Event already processed" });
+      return res.status(200).json({ message: "Event already processed" });
     }
 
     // Event handling switch
@@ -74,6 +73,7 @@ exports.webhook = async (req, res) => {
     return res.status(200).json({
       message: "Webhook received and processed successfully",
     });
+  }
   } catch (error) {
     console.error("Error handling Korapay webhook", error);
     return res.status(500).json({
