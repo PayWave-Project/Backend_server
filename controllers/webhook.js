@@ -27,7 +27,10 @@ exports.webhook = async (req, res) => {
 
     // Compare the computed hash with the signature from the headers
     if (hash !== korapaySignature) {
-      console.error("Invalid signature:", { expected: hash, received: korapaySignature });
+      console.error("Invalid signature:", {
+        expected: hash,
+        received: korapaySignature,
+      });
       // return res.status(400).send({ error: "Invalid signature" });
     }
 
@@ -35,14 +38,20 @@ exports.webhook = async (req, res) => {
     const event = req.body;
 
     // Prevent duplicate event processing (check by transaction reference)
-    const existingEvent = await paymentModel.findOne({ reference: event.data.reference });
-    const existingEventW = await withdrawModel.findOne({ reference: event.data.reference });
+    const existingEvent = await paymentModel.findOne({
+      reference: event.data.reference,
+    });
+    const existingEventW = await withdrawModel.findOne({
+      reference: event.data.reference,
+    });
 
     if (
-      (existingEvent && existingEvent.status === event.data.status) || 
+      (existingEvent && existingEvent.status === event.data.status) ||
       (existingEventW && existingEventW.status === event.data.status)
     ) {
-      console.log(`Event with reference ${event.data.reference} already processed.`);
+      console.log(
+        `Event with reference ${event.data.reference} already processed.`
+      );
       return res.status(200).json({ message: "Event already processed" });
     }
 
@@ -77,7 +86,6 @@ exports.webhook = async (req, res) => {
     });
   }
 };
-
 
 // Event handlers
 const handleChargeSuccess = async (event) => {
@@ -127,7 +135,7 @@ const handleChargeSuccess = async (event) => {
       }
 
       merchant.balance += paymentRecord.amount;
-      (paymentRecord.eventId = event.id), await merchant.save();
+      await merchant.save();
       await paymentRecord.save();
 
       // // Update the admin's commission earned
@@ -136,23 +144,23 @@ const handleChargeSuccess = async (event) => {
       //     admin.commissionEarned += paymentRecord.commission;
       //     await admin.save();
       // }
+
+      // Notify merchant via email
+      await sendEmailNotification(
+        merchant.email,
+        "Payment Successful",
+        `Customer payment of ${paymentRecord.amount} ${paymentRecord.currency} was successful. Reference: ${paymentRecord.reference}. \n\n PayWave Team`
+      );
+
+      const notify = await notificationModel.create({
+        merchant: merchant._id,
+        email: merchant.email,
+        subject: "Payment Successful",
+        message: `Payment of ${paymentRecord.amount} ${paymentRecord.currency} was successful. Reference: ${paymentRecord.reference}. \n\n PayWave Team`,
+        date: new Date().toLocaleDateString(),
+        time: new Date().toLocaleTimeString(),
+      });
     }
-
-    // Notify merchant via email
-    await sendEmailNotification(
-      merchant.email,
-      "Payment Successful",
-      `Customer payment of ${paymentRecord.amount} ${paymentRecord.currency} was successful. Reference: ${paymentRecord.reference}. \n\n PayWave Team`
-    );
-
-    const notify = await notificationModel.create({
-      merchant: merchant._id,
-      email: merchant.email,
-      subject: "Payment Successful",
-      message: `Payment of ${paymentRecord.amount} ${paymentRecord.currency} was successful. Reference: ${paymentRecord.reference}. \n\n PayWave Team`,
-      date: new Date().toLocaleDateString(),
-      time: new Date().toLocaleTimeString(),
-    });
 
     console.log("Payment verification completed successfully!");
   } catch (err) {
