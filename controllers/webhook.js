@@ -25,20 +25,16 @@ exports.webhook = async (req, res) => {
       .update(JSON.stringify(req.body.data))
       .digest("hex");
 
-      console.log("Req Body Data:", req.body.data);
-      console.log("Korapay Secret Key:", KORAPAY_SECRET_KEY);
-      console.log("Expected Hash:", hash);
-      console.log("Received Signature:", korapaySignature);
-
+    console.log("Req Body Data:", req.body.data);
+    console.log("Korapay Secret Key:", KORAPAY_SECRET_KEY);
+    console.log("Expected Hash:", hash);
+    console.log("Received Signature:", korapaySignature);
 
     // Compare the computed hash with the signature from the headers
     if (hash !== korapaySignature) {
       console.error("Invalid signature:", { expected: hash, received: korapaySignature });
-      return res.status(400).send({ error: "Invalid signature" });
+      // return res.status(400).send({ error: "Invalid signature" });
     }
-
-    // Send a 200 response to acknowledge receipt of the webhook (as per best practices)
-    res.status(200).json({ message: "Webhook received and acknowledged" });
 
     // Parse the event
     const event = req.body;
@@ -46,11 +42,16 @@ exports.webhook = async (req, res) => {
     // Prevent duplicate event processing (check by transaction reference)
     const existingEvent = await paymentModel.findOne({ reference: event.data.reference });
     const existingEventW = await withdrawModel.findOne({ reference: event.data.reference });
-    if (existingEvent && existingEvent.status === event.data.status || existingEventW && existingEventW.status === event.data.status) {
+
+    if (
+      (existingEvent && existingEvent.status === event.data.status) || 
+      (existingEventW && existingEventW.status === event.data.status)
+    ) {
       console.log(`Event with reference ${event.data.reference} already processed.`);
-      return;
+      // return res.status(200).json({ message: "Event already processed" });
     }
 
+    // Event handling switch
     switch (event.event) {
       case "charge.success":
         await handleChargeSuccess(event);
@@ -69,7 +70,7 @@ exports.webhook = async (req, res) => {
         break;
     }
 
-    // Respond with 200 OK to acknowledge receipt of the event
+    // Send 200 OK after full processing
     return res.status(200).json({
       message: "Webhook received and processed successfully",
     });
