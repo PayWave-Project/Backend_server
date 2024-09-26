@@ -26,36 +26,39 @@ function encryptAES256(encryptionKey, paymentData) {
 
 // Helper function to list banks
 exports.listBanks = async () => {
-    try {
-      const response = await axios.get(`${KORAPAY_API_BASE_URL}/merchant/api/v1/misc/banks?countryCode=NG`, {
+  try {
+    const response = await axios.get(
+      `${KORAPAY_API_BASE_URL}/merchant/api/v1/misc/banks?countryCode=NG`,
+      {
         headers: {
           Authorization: `Bearer ${KORAPAY_PUBLIC_KEY}`,
         },
-      });
-      console.log(response.data.data);
-      const banks = response.data.data;
+      }
+    );
+    console.log(response.data.data);
+    const banks = response.data.data;
 
     // Step 2: Use map to create an array of save promises
     const savePromises = banks.map((bank) => {
-        const newBankCode = new bankCodeModel({
-          name: bank.name,
-          slug: bank.slug,
-          code: bank.code,
-          country: bank.country,
-          nibss_bank_code: bank.nibss_bank_code,
-        });
-
-        // Step 3: Return the promise of the save operation
-        return newBankCode.save();
+      const newBankCode = new bankCodeModel({
+        name: bank.name,
+        slug: bank.slug,
+        code: bank.code,
+        country: bank.country,
+        nibss_bank_code: bank.nibss_bank_code,
       });
 
-      // Step 4: Use Promise.all to wait for all save operations to complete
-      await Promise.all(savePromises);
-    } catch (error) {
-      console.error("Error fetching banks:", error.message);
-      throw new Error("Unable to fetch bank list");
-    }
+      // Step 3: Return the promise of the save operation
+      return newBankCode.save();
+    });
+
+    // Step 4: Use Promise.all to wait for all save operations to complete
+    await Promise.all(savePromises);
+  } catch (error) {
+    console.error("Error fetching banks:", error.message);
+    throw new Error("Unable to fetch bank list");
   }
+};
 
 // Helper function to verify bank account
 const verifyBankAccount = async (bankCode, accountNumber) => {
@@ -91,7 +94,8 @@ const verifyBankAccount = async (bankCode, accountNumber) => {
 exports.withdrawFunds = async (req, res) => {
   try {
     const { userId } = req.user;
-    const { amount, beneficiaryBankCode, beneficiaryAccountNumber, email } = req.body;
+    const { amount, beneficiaryBankCode, beneficiaryAccountNumber, email } =
+      req.body;
 
     // Fetch merchant details
     const merchant = await merchantModel.findById(userId);
@@ -100,11 +104,15 @@ exports.withdrawFunds = async (req, res) => {
     }
 
     if (isNaN(amount)) {
-      return res.status(400).json({ message: "Amount must be a valid number!" });
+      return res
+        .status(400)
+        .json({ message: "Amount must be a valid number!" });
     }
 
     if (amount < 1000) {
-      return res.status(400).json({ message: "Amount must be 1000 or above for Payout!" });
+      return res
+        .status(400)
+        .json({ message: "Amount must be 1000 or above for Payout!" });
     }
 
     if (merchant.balance < amount) {
@@ -202,11 +210,19 @@ exports.withdrawFunds = async (req, res) => {
   }
 };
 
-
 // Function to get all banks and their bank code
 exports.getAllBankCode = async (req, res) => {
   try {
-    const bankCode = await bankCodeModel.find();
+    // Get the page number and limit from query parameters, with default values
+    const page = parseInt(req.query.page) || 1; 
+    const limit = parseInt(req.query.limit) || 10; 
+    const skip = (page - 1) * limit; 
+
+    // Fetch bank codes with pagination
+    const bankCode = await bankCodeModel.find().skip(skip).limit(limit);
+
+    // Get the total number of bank codes for pagination info
+    const totalBankCodes = await bankCodeModel.countDocuments();
 
     if (!bankCode || bankCode.length === 0) {
       return res.status(400).json({ message: "Banks not found!" });
@@ -214,12 +230,17 @@ exports.getAllBankCode = async (req, res) => {
 
     return res.status(200).json({
       message: "List of banks in Nigeria and their bank code",
-      data: bankCode
+      data: bankCode,
+      pagination: {
+        total: totalBankCodes,
+        page: page,
+        limit: limit,
+        totalPages: Math.ceil(totalBankCodes / limit),
+      },
     });
-
   } catch (error) {
     return res.status(500).json({
       message: "Internal Server Error: " + error.message,
     });
   }
-}
+};
