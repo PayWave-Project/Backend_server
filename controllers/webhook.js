@@ -5,6 +5,7 @@ const withdrawModel = require("../models/withdrawModel");
 const transactionModel = require("../models/transactionModel");
 const notificationModel = require("../models/notificationModel");
 const sendEmailNotification = require("../utils/emailNotification");
+const axios = require("axios");
 require("dotenv").config();
 
 const KORAPAY_API_BASE_URL = process.env.KORAPAY_API_BASE_URL;
