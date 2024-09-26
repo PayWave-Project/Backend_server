@@ -94,7 +94,7 @@ exports.cardPay = async (req, res) => {
       email: email,
       amount: response.data.data.amount,
       status: response.data.data.status,
-      reference: response.data.data.reference,
+      reference: response.data.data.payment_reference,
       type: "Card",
     };
 
@@ -333,7 +333,7 @@ exports.bankTransferPay = async (req, res) => {
       email: response.data.data.customer.email,
       amount: response.data.data.amount,
       status: response.data.data.status,
-      reference: response.data.data.reference,
+      reference: response.data.data.payment_reference,
       type: "Transfer",
     };
 
