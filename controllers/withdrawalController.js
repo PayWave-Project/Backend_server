@@ -201,3 +201,25 @@ exports.withdrawFunds = async (req, res) => {
     });
   }
 };
+
+
+// Function to get all banks and their bank code
+exports.getAllBankCode = async (req, res) => {
+  try {
+    const bankCode = await bankCodeModel.find();
+
+    if (!bankCode || bankCode.length === 0) {
+      return res.status(400).json({ message: "Banks not found!" });
+    }
+
+    return res.status(200).json({
+      message: "List of banks in Nigeria and their bank code",
+      data: bankCode
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      message: "Internal Server Error: " + error.message,
+    });
+  }
+}
