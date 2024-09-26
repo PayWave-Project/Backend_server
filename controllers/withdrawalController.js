@@ -24,38 +24,38 @@ function encryptAES256(encryptionKey, paymentData) {
   return `${ivToHex}:${encryptedToHex}:${cipher.getAuthTag().toString("hex")}`;
 }
 
-// // Helper function to list banks
-// const listBanks = async () => {
-//     try {
-//       const response = await axios.get(`${KORAPAY_API_BASE_URL}/merchant/api/v1/misc/banks?countryCode=NG`, {
-//         headers: {
-//           Authorization: `Bearer ${KORAPAY_PUBLIC_KEY}`,
-//         },
-//       });
-//       console.log(response.data.data);
-//       const banks = response.data.data;
+// Helper function to list banks
+exports.listBanks = async () => {
+    try {
+      const response = await axios.get(`${KORAPAY_API_BASE_URL}/merchant/api/v1/misc/banks?countryCode=NG`, {
+        headers: {
+          Authorization: `Bearer ${KORAPAY_PUBLIC_KEY}`,
+        },
+      });
+      console.log(response.data.data);
+      const banks = response.data.data;
 
-//     // Step 2: Use map to create an array of save promises
-//     const savePromises = banks.map((bank) => {
-//         const newBankCode = new bankCodeModel({
-//           name: bank.name,
-//           slug: bank.slug,
-//           code: bank.code,
-//           country: bank.country,
-//           nibss_bank_code: bank.nibss_bank_code,
-//         });
+    // Step 2: Use map to create an array of save promises
+    const savePromises = banks.map((bank) => {
+        const newBankCode = new bankCodeModel({
+          name: bank.name,
+          slug: bank.slug,
+          code: bank.code,
+          country: bank.country,
+          nibss_bank_code: bank.nibss_bank_code,
+        });
 
-//         // Step 3: Return the promise of the save operation
-//         return newBankCode.save();
-//       });
+        // Step 3: Return the promise of the save operation
+        return newBankCode.save();
+      });
 
-//       // Step 4: Use Promise.all to wait for all save operations to complete
-//       await Promise.all(savePromises);
-//     } catch (error) {
-//       console.error("Error fetching banks:", error.message);
-//       throw new Error("Unable to fetch bank list");
-//     }
-//   }
+      // Step 4: Use Promise.all to wait for all save operations to complete
+      await Promise.all(savePromises);
+    } catch (error) {
+      console.error("Error fetching banks:", error.message);
+      throw new Error("Unable to fetch bank list");
+    }
+  }
 
 // Helper function to verify bank account
 const verifyBankAccount = async (bankCode, accountNumber) => {
@@ -105,6 +105,10 @@ exports.withdrawFunds = async (req, res) => {
 
     if (amount < 1000) {
       return res.status(400).json({ message: "Amount must be 1000 or above for Payout!" });
+    }
+
+    if (merchant.balance < amount) {
+      return res.status(400).json({ message: "Insufficient account balance." });
     }
 
     const bankCode = await bankCodeModel.findOne({ code: beneficiaryBankCode });
