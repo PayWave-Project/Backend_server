@@ -104,7 +104,8 @@ exports.generateQRCode = async (req, res) => {
     return res.status(201).json({
       message: "QR Payment successfully generated!",
       qrCode: qrCodeDataURL,
-      paymentUrl: checkout_url,
+      reference: newPayment.reference,
+      // paymentUrl: checkout_url,
     });
   } catch (error) {
     return res.status(500).json({

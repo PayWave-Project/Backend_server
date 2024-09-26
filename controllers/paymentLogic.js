@@ -91,7 +91,7 @@ exports.cardPay = async (req, res) => {
       merchant: merchant._id,
       merchantId: merchant.merchantId,
       currency: response.data.data.currency,
-      email: response.data.data.customer.email,
+      email: email,
       amount: response.data.data.amount,
       status: response.data.data.status,
       reference: response.data.data.reference,
