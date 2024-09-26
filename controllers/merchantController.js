@@ -87,6 +87,7 @@ exports.registerMerchant = async (req, res) => {
       businessName: req.body.businessName.toLowerCase().trim(),
       phoneNumber: req.body.phoneNumber.trim(),
       password: req.body.password,
+      address: req.body.address.trim(), 
     };
 
     if (!merchantDetail) {
@@ -115,6 +116,7 @@ exports.registerMerchant = async (req, res) => {
       email: merchantDetail.email.trim(),
       businessName: merchantDetail.businessName.trim(),
       phoneNumber: merchantDetail.phoneNumber.trim(),
+      address: merchantDetail.address.trim(),
       merchantId: merchantID,
       password: hashedPassword,
       otp: otp,
@@ -203,7 +205,7 @@ exports.verify = async (req, res) => {
       } else {
         // The block period has passed, reset the block and generate new OTP
         const newOTP = generateOTP();
-        const otpExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes from now
+        const otpExpiry = new Date(Date.now() + 15 * 60 * 1000);
 
         await merchantModel.findByIdAndUpdate(id, {
           blockedUntil: null,
@@ -221,7 +223,7 @@ exports.verify = async (req, res) => {
         await sendEmail({
           email: merchant.email,
           html,
-          subject,
+          subject
         });
 
         return res

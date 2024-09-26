@@ -12,6 +12,11 @@ const merchantSchema = new Schema({
         lowercase: true,
         required: true
     },
+    address: {
+        type: String,
+        lowercase: true,
+        required: true
+    },
     merchantId: {
         type: String,
     },

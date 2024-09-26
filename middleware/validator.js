@@ -10,6 +10,7 @@ const validateMerchant = (data) => {
         const merchantValidationSchema = z.object({
             firstName: z.string().min(3, { message: "First Name must be at least 3 characters long" }).nonempty({ message: "First Name is required" }),
             lastName: z.string().min(3, { message: "Last Name must be at least 3 characters long" }).nonempty({ message: "Last Name is required" }),
+            address: z.string().min(3, { message: "Address must be at least 3 characters long" }).nonempty({ message: "Address is required" }),
             businessName: z.string().min(3, { message: "Business Name must be at least 3 characters long" }).nonempty({ message: "Business Name is required" }),
             email: z.string().email({ message: "Please provide a valid email address" }).nonempty({ message: "Email is required" }),
             phoneNumber: z.string().min(10, { message: "Phone Number must be at least 10 digits" }).nonempty({ message: "Phone Number is required" }),
