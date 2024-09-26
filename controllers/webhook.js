@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const paymentModel = require("../models/paymentModel");
 const merchantModel = require("../models/merchantModel");
 const withdrawModel = require("../models/withdrawModel");
+const transactionModel = require("../models/transactionModel");
 const notificationModel = require("../models/notificationModel");
 const sendEmailNotification = require("../utils/emailNotification");
 require("dotenv").config();
@@ -44,10 +45,14 @@ exports.webhook = async (req, res) => {
     const existingEventW = await withdrawModel.findOne({
       reference: event.data.reference,
     });
+    const existingEventT = await transactionModel.findOne({
+      reference: event.data.reference,
+    });
 
     if (
       (existingEvent && existingEvent.status === event.data.status) ||
-      (existingEventW && existingEventW.status === event.data.status)
+      (existingEventW && existingEventW.status === event.data.status) ||
+      (existingEventT && existingEventT.status === event.data.status)
     ) {
       console.log(
         `Event with reference ${event.data.reference} already processed.`
@@ -90,210 +95,464 @@ exports.webhook = async (req, res) => {
 // Event handlers
 const handleChargeSuccess = async (event) => {
   const paymentData = event.data;
-  console.log("Handling charge success:", paymentData);
+  console.log("Handling charge success:");
 
   try {
-    // Update the payment status for successful payments
-    const paymentRecord = await paymentModel.findOne({
+    // Find the payment record by reference, starting with paymentModel
+    let paymentRecord = await paymentModel.findOne({
       reference: paymentData.reference,
     });
-    if (paymentRecord) {
-      paymentRecord.status = "success";
-      await paymentRecord.save();
 
-      // Update the merchant wallet balance
-      const merchant = await merchantModel.findById(paymentRecord.merchant);
-      if (!merchant) {
-        console.error(
-          "Merchant not found for payment:",
-          paymentRecord.merchant
-        );
-        return;
-      }
-      // Payout to the merchant's Korapay virtual account
-      const payoutPayload = {
-        destination: {
-          amount: paymentRecord.amount, // Amount to be transferred
-          currency: "NGN",
-          type: "bank_account",
-          bank_account: {
-            account_number: merchant.bankAccountDetails.accountNumber,
-            bank_code: merchant.bankAccountDetails.bankCode,
-            account_name: merchant.bankAccountDetails.accountName,
-          },
-          narration: `Disbursement of ${paymentRecord.amount} NGN to ${merchant.name}`,
+    // If not found in paymentModel, search in transactionModel
+    if (!paymentRecord) {
+      paymentRecord = await transactionModel.findOne({
+        reference: paymentData.reference,
+      });
+    }
+
+    if (!paymentRecord) {
+      console.error(
+        "Payment record not found for reference:",
+        paymentData.reference
+      );
+      return;
+    }
+
+    // Update the payment status to "success"
+    paymentRecord.status = "success";
+
+    // Fetch the merchant based on the payment record's merchant ID
+    const merchant = await merchantModel.findById(paymentRecord.merchant);
+    if (!merchant) {
+      console.error("Merchant not found for payment:", paymentRecord.reference);
+      return;
+    }
+
+    // Prepare the payout payload for the merchant
+    const payoutPayload = {
+      destination: {
+        amount: paymentRecord.amount,
+        currency: "NGN",
+        type: "bank_account",
+        bank_account: {
+          account_number: merchant.bankAccountDetails.accountNumber,
+          bank_code: merchant.bankAccountDetails.bankCode,
+          account_name: merchant.bankAccountDetails.accountName,
         },
-        reference: `PAYOUT_${paymentRecord.reference}`,
-      };
+        narration: `Disbursement of ${paymentRecord.amount} NGN to ${merchant.name}`,
+      },
+      reference: `comm_${paymentRecord.reference}`,
+    };
 
-      // Separate payout logic in a function
-      const payoutResult = await processPayout(payoutPayload);
-      if (payoutResult.success) {
-        console.log(
-          `Successfully disbursed ${paymentRecord.amount} to merchant ${merchant._id}`
-        );
-      }
-
-      merchant.balance += paymentRecord.amount;
-      await merchant.save();
+    // Process the payout to the merchant's account
+    const payoutResult = await processPayout(payoutPayload);
+    if (!payoutResult.success) {
+      console.error(
+        `Payout failed for merchant ${merchant._id}:`,
+        payoutResult.error
+      );
+      paymentRecord.status = "payout_failed"; // Update status if payout failed
       await paymentRecord.save();
+      return;
+    }
 
-      // // Update the admin's commission earned
-      // const admin = await adminModel.findOne({ email: 'info@vadtrans.com.ng' });
-      // if (admin) {
-      //     admin.commissionEarned += paymentRecord.commission;
-      //     await admin.save();
-      // }
+    console.log(
+      `Successfully disbursed ${paymentRecord.amount} to merchant ${merchant._id}`
+    );
 
-      // Notify merchant via email
-      await sendEmailNotification(
+    // Add the payment amount to the merchant's balance
+    merchant.balance += paymentRecord.amount;
+
+    // Push the transaction reference into transactionHistory
+    merchant.transactionHistory.push({
+      reference: paymentRecord.reference,
+      amount: paymentRecord.amount,
+      status: paymentRecord.status,
+      type: paymentRecord.type || "charge", // Set type as 'charge' by default
+      date: new Date().toLocaleDateString(),
+      time: new Date().toLocaleTimeString(),
+    });
+
+    // Push the notification message into the notification array
+    const notifyMsg = {
+      notificationMessage: `Payment of ${paymentRecord.amount} ${paymentRecord.currency} was successful. Reference: ${paymentRecord.reference}. \n\n PayWave Team`,
+      date: new Date().toLocaleDateString(),
+      time: new Date().toLocaleTimeString(),
+    };
+    merchant.notification.push(notifyMsg);
+
+    // Save the updated merchant and payment records concurrently
+    await Promise.all([merchant.save(), paymentRecord.save()]);
+
+    // Send notification email and create notification record concurrently
+    await Promise.all([
+      sendEmailNotification(
         merchant.email,
         "Payment Successful",
         `Customer payment of ${paymentRecord.amount} ${paymentRecord.currency} was successful. Reference: ${paymentRecord.reference}. \n\n PayWave Team`
-      );
-
-      const notify = await notificationModel.create({
+      ),
+      notificationModel.create({
         merchant: merchant._id,
         email: merchant.email,
         subject: "Payment Successful",
         message: `Payment of ${paymentRecord.amount} ${paymentRecord.currency} was successful. Reference: ${paymentRecord.reference}. \n\n PayWave Team`,
         date: new Date().toLocaleDateString(),
         time: new Date().toLocaleTimeString(),
-      });
-    }
+      }),
+    ]);
 
-    console.log("Payment verification completed successfully!");
+    console.log(
+      "Payment verification and merchant notification completed successfully!"
+    );
   } catch (err) {
-    console.error("Error saving transaction:", err.message);
+    console.error("Error processing charge success event:", err.message);
   }
 };
 
 const handleChargeFailed = async (event) => {
   const paymentData = event.data;
-  console.log("Handling charge failed:", paymentData);
+  console.log("Handling charge failed:");
 
   try {
-    // Update the payment status for successful payments
-    const paymentRecord = await paymentModel.findOne({
+    // Find the payment record by reference, starting with paymentModel
+    let paymentRecord = await paymentModel.findOne({
       reference: paymentData.reference,
     });
-    if (paymentRecord) {
-      paymentRecord.status = "failed";
-      await paymentRecord.save();
+
+    // If not found in paymentModel, search in transactionModel
+    if (!paymentRecord) {
+      paymentRecord = await transactionModel.findOne({
+        reference: paymentData.reference,
+      });
     }
 
-    const merchant = await merchantModel.findOne({
-      email: paymentRecord.email,
-    });
-    if (!merchant) {
-      console.error("merchant not found for payment:", paymentRecord.email);
+    // If no payment record is found in either model, log and exit
+    if (!paymentRecord) {
+      console.error(
+        "Payment record not found for reference:",
+        paymentData.reference
+      );
       return;
     }
 
-    // Notify merchant via email
+    // Update the payment status to "failed"
+    paymentRecord.status = "failed";
+    await paymentRecord.save();
+
+    // Fetch the merchant based on the payment record's merchant ID
+    const merchant = await merchantModel.findById(paymentRecord.merchant);
+    if (!merchant) {
+      console.error("Merchant not found for payment:", paymentRecord.merchant);
+      return;
+    }
+
+    // Push the transaction reference into transactionHistory
+    merchant.transactionHistory.push({
+      reference: paymentRecord.reference,
+      amount: paymentRecord.amount,
+      status: paymentRecord.status,
+      type: paymentRecord.type || "charge", // Set type as 'charge' by default
+      date: new Date().toLocaleDateString(),
+      time: new Date().toLocaleTimeString(),
+    });
+
+    // Push the notification message into the notification array
+    const notifyMsg = {
+      notificationMessage: `Payment of ${paymentRecord.amount} ${paymentRecord.currency} has failed. Reference: ${paymentRecord.reference}. \n\n PayWave Team`,
+      date: new Date().toLocaleDateString(),
+      time: new Date().toLocaleTimeString(),
+    };
+    merchant.notification.push(notifyMsg);
+    await merchant.save();
+
+    // Notify merchant via email about the failed payment
     await sendEmailNotification(
       merchant.email,
       "Payment Failed",
-      `Customer payment of ${paymentRecord.amount} ${paymentRecord.currency} has failed. Reference: ${paymentRecord.reference}. \n\n PayWave team`
+      `Customer payment of ${paymentRecord.amount} ${paymentRecord.currency} has failed. Reference: ${paymentRecord.reference}. \n\n PayWave Team`
     );
+
+    notificationModel.create({
+      merchant: merchant._id,
+      email: merchant.email,
+      subject: "Payment failed",
+      message: `Payment of ${paymentRecord.amount} ${paymentRecord.currency} has failed. Reference: ${paymentRecord.reference}. \n\n PayWave Team`,
+      date: new Date().toLocaleDateString(),
+      time: new Date().toLocaleTimeString(),
+    });
 
     console.log("Payment failure handled successfully!");
   } catch (err) {
-    console.error("Error saving transaction:", err.message);
+    console.error("Error handling charge failure:", err.message);
   }
 };
 
-// const handleTransferSuccess = async (event) => {
-//     const transferData = event.data;
-//     console.log('Handling transfer success:', transferData);
+const handleTransferSuccess = async (event) => {
+  const transferData = event.data;
+  console.log("Handling transfer success:");
 
-//     try {
-//         // Check if it's a withdrawal event
-//         const withdrawal = await withdrawalModel.findOne({ transferId: transferData.transfer_code });
-//         if (withdrawal) {
-//             // Update the withdrawal status to 'completed'
-//             withdrawal.status = 'completed';
-//             await withdrawal.save();
+  try {
+    // Check if it's a withdrawal event by searching in the withdrawModel
+    const withdrawal = await withdrawModel.findOne({
+      reference: transferData.reference,
+    });
 
-//             // Deduct the amount from the company's wallet balance
-//             const transCompany = await transCompanyModel.findById(withdrawal.transCompany);
-//             transCompany.walletBalance -= withdrawal.amount;
-//             await transCompany.save();
+    if (withdrawal) {
+      // Update the withdrawal status to 'success'
+      withdrawal.status = "success";
+      await withdrawal.save();
 
-//             // Notify merchant via email
-//             await sendEmailNotification(
-//                 withdrawal.email,
-//                 'Transfer Successful',
-//                 `Your transfer of ${withdrawal.amount} ${withdrawal.currency} was successful. Transfer Code: ${withdrawal.reference}.`
-//             );
+      // Fetch the merchant and deduct the amount from their balance
+      const merchant = await merchantModel.findById(withdrawal.merchant);
+      if (merchant) {
+        merchant.balance -= withdrawal.amount;
 
-//             console.log(`Withdrawal ${transferData.transfer_code} successful and processed.`);
-//         } else {
-//             // Handle other transfer successes ( transfer related to payments )
-//             const paymentRecord = await paymentModel.findOne({ reference: transferData.reference });
-//             if (paymentRecord) {
-//                 paymentRecord.status = 'success';
-//                 await paymentRecord.save();
+        // Push the transaction into the merchant's transactionHistory
+        merchant.transactionHistory.push({
+          reference: withdrawal.reference,
+          amount: withdrawal.amount,
+          status: "success",
+          type: "withdrawal",
+          date: new Date().toLocaleDateString(),
+          time: new Date().toLocaleTimeString(),
+        });
 
-//                 const merchant = await merchantModel.findOne({ email: paymentRecord.email });
-//                 if (merchant) {
-//                     // Notify merchant via email
-//                     await sendEmailNotification(
-//                         merchant.email,
-//                         'Transfer Successful',
-//                         `Your transfer of ${paymentRecord.amount} ${paymentRecord.currency} was successful. Transfer Code: ${paymentRecord.reference}. \n\n PayWave team`
-//                     );
-//                 }
+        // Push the notification message into the merchant's notification array
+        merchant.notification.push({
+          notificationMessage: `Your withdrawal of ${withdrawal.amount} ${withdrawal.currency} was successful. Reference: ${withdrawal.reference}.`,
+          date: new Date().toLocaleDateString(),
+          time: new Date().toLocaleTimeString(),
+        });
 
-//                 console.log('Transfer success handled successfully!');
-//             }
-//         }
-//     } catch (err) {
-//         console.error('Transfer Success Handling Error: ', err.message);
-//     }
-// };
+        await merchant.save();
 
-// const handleTransferFailed = async (event) => {
-//     const transferData = event.data;
-//     console.log('Handling transfer failure:', transferData);
+        // Notify merchant via email about the successful withdrawal
+        await sendEmailNotification(
+          merchant.email,
+          "Withdrawal Successful",
+          `Your withdrawal of ${withdrawal.amount} ${withdrawal.currency} was successful. Transfer reference: ${withdrawal.reference}.`
+        );
 
-//     try {
-//         const withdrawal = await withdrawalModel.findOne({ transferId: transferData.transfer_code });
-//         if (withdrawal) {
-//             // Update the withdrawal status to 'failed'
-//             withdrawal.status = 'failed';
-//             await withdrawal.save();
+        // Create a notification record in the notificationModel
+        await notificationModel.create({
+          merchant: merchant._id,
+          email: merchant.email,
+          subject: "Withdrawal Successful",
+          message: `Your withdrawal of ${withdrawal.amount} ${withdrawal.currency} was successful. Reference: ${withdrawal.reference}.`,
+          date: new Date().toLocaleDateString(),
+          time: new Date().toLocaleTimeString(),
+        });
 
-//             // Notify merchant via email
-//             await sendEmailNotification(
-//                 withdrawal.email,
-//                 'Transfer Failed',
-//                 `Your transfer of ${withdrawal.amount} ${withdrawal.currency} has failed. Transfer Code: ${withdrawal.reference}.`
-//             );
+        console.log(
+          `Withdrawal ${transferData.reference} successful and processed.`
+        );
+      } else {
+        console.error(
+          "Merchant not found for withdrawal:",
+          withdrawal.merchant
+        );
+        return;
+      }
+    } else {
+      // If it's not a withdrawal, handle other transfer successes (e.g., transfer related to payments)
+      const paymentRecord = await paymentModel.findOne({
+        reference: transferData.reference,
+      });
 
-//             console.log(`Withdrawal ${transferData.transfer_code} failed and processed.`);
-//         } else {
-//             const paymentRecord = await paymentModel.findOne({ reference: transferData.reference });
-//             if (paymentRecord) {
-//                 paymentRecord.status = 'failed';
-//                 await paymentRecord.save();
+      if (paymentRecord) {
+        // Update the payment status to 'success'
+        paymentRecord.status = "success";
+        await paymentRecord.save();
 
-//                 const merchant = await merchantModel.findOne({ email: paymentRecord.email });
-//                 if (merchant) {
-//                     await sendEmailNotification(
-//                         merchant.email,
-//                         'Transfer Failed',
-//                         `Your transfer of ${paymentRecord.amount} ${paymentRecord.currency} has failed. Transfer Code: ${paymentRecord.reference}.`
-//                     );
-//                 }
+        const merchant = await merchantModel.findById(paymentRecord.merchant);
+        if (merchant) {
+          // Push the transaction into the merchant's transactionHistory
+          merchant.transactionHistory.push({
+            reference: paymentRecord.reference,
+            amount: paymentRecord.amount,
+            status: "success",
+            type: "payment",
+            date: new Date().toLocaleDateString(),
+            time: new Date().toLocaleTimeString(),
+          });
 
-//                 console.log('Transfer failure handled successfully!');
-//             }
-//         }
-//     } catch (err) {
-//         console.error('Transfer Failure Handling Error: ', err.message);
-//     }
-// };
+          // Push the notification message into the merchant's notification array
+          merchant.notification.push({
+            notificationMessage: `Your transfer of ${paymentRecord.amount} ${paymentRecord.currency} was successful. Reference: ${paymentRecord.reference}. \n\n PayWave Team`,
+            date: new Date().toLocaleDateString(),
+            time: new Date().toLocaleTimeString(),
+          });
+
+          await merchant.save();
+
+          // Notify merchant via email
+          await sendEmailNotification(
+            merchant.email,
+            "Payment Transfer Successful",
+            `Your transfer of ${paymentRecord.amount} ${paymentRecord.currency} was successful. Transfer reference: ${paymentRecord.reference}. \n\n PayWave Team`
+          );
+
+          // Create a notification record in the notificationModel
+          await notificationModel.create({
+            merchant: merchant._id,
+            email: merchant.email,
+            subject: "Payment Successful",
+            message: `Payment of ${paymentRecord.amount} ${paymentRecord.currency} was successful. Reference: ${paymentRecord.reference}. \n\n PayWave Team`,
+            date: new Date().toLocaleDateString(),
+            time: new Date().toLocaleTimeString(),
+          });
+
+          console.log("Payment transfer success handled successfully!");
+        } else {
+          console.error(
+            "Merchant not found for payment transfer:",
+            paymentRecord.merchant
+          );
+        }
+      } else {
+        console.error(
+          "No withdrawal or payment record found for reference:",
+          transferData.reference
+        );
+      }
+    }
+  } catch (err) {
+    console.error("Transfer Success Handling Error:", err.message);
+  }
+};
+
+
+const handleTransferFailed = async (event) => {
+  const transferData = event.data;
+  console.log("Handling transfer failure:");
+
+  try {
+    // Check if it's a withdrawal event by searching in the withdrawModel
+    const withdrawal = await withdrawModel.findOne({
+      reference: transferData.reference,
+    });
+
+    if (withdrawal) {
+      // Update the withdrawal status to 'failed'
+      withdrawal.status = "failed";
+      await withdrawal.save();
+
+      // Fetch the merchant associated with the withdrawal
+      const merchant = await merchantModel.findById(withdrawal.merchant);
+      if (merchant) {
+        // Push the notification message into the merchant's notification array
+        merchant.notification.push({
+          notificationMessage: `Your withdrawal of ${withdrawal.amount} ${withdrawal.currency} has failed. Reference: ${withdrawal.reference}.`,
+          date: new Date().toLocaleDateString(),
+          time: new Date().toLocaleTimeString(),
+        });
+
+        // Push the transaction into the merchant's transactionHistory
+        merchant.transactionHistory.push({
+          reference: withdrawal.reference,
+          amount: withdrawal.amount,
+          status: "failed",
+          type: "transfer",
+          date: new Date().toLocaleDateString(),
+          time: new Date().toLocaleTimeString(),
+        });
+
+        await merchant.save();
+
+        // Notify merchant via email about the failed withdrawal
+        await sendEmailNotification(
+          merchant.email,
+          "Withdrawal Failed",
+          `Your withdrawal of ${withdrawal.amount} ${withdrawal.currency} has failed. Reference: ${withdrawal.reference}.`
+        );
+
+        // Create a notification record in the notificationModel
+        await notificationModel.create({
+          merchant: merchant._id,
+          email: merchant.email,
+          subject: "Withdrawal Failed",
+          message: `Your withdrawal of ${withdrawal.amount} ${withdrawal.currency} has failed. Reference: ${withdrawal.reference}.`,
+          date: new Date().toLocaleDateString(),
+          time: new Date().toLocaleTimeString(),
+        });
+
+        console.log(
+          `Withdrawal ${transferData.reference} failed and processed.`
+        );
+      } else {
+        console.error(
+          "Merchant not found for withdrawal:",
+          withdrawal.merchant
+        );
+        return;
+      }
+    } else {
+      // If it's not a withdrawal, handle other transfer failures (e.g., payment related)
+      const paymentRecord = await paymentModel.findOne({
+        reference: transferData.reference,
+      });
+
+      if (paymentRecord) {
+        // Update the payment status to 'failed'
+        paymentRecord.status = "failed";
+        await paymentRecord.save();
+
+        const merchant = await merchantModel.findById(paymentRecord.merchant);
+        if (merchant) {
+          // Push the notification message into the merchant's notification array
+          merchant.notification.push({
+            notificationMessage: `Payment of ${paymentRecord.amount} ${paymentRecord.currency} has failed. Reference: ${paymentRecord.reference}. \n\n PayWave Team`,
+            date: new Date().toLocaleDateString(),
+            time: new Date().toLocaleTimeString(),
+          });
+
+          // Push the transaction into the merchant's transactionHistory
+          merchant.transactionHistory.push({
+            reference: paymentRecord.reference,
+            amount: paymentRecord.amount,
+            status: "failed",
+            type: "transfer",
+            date: new Date().toLocaleDateString(),
+            time: new Date().toLocaleTimeString(),
+          });
+
+          await merchant.save();
+
+          // Notify merchant via email
+          await sendEmailNotification(
+            merchant.email,
+            "Payment Transfer Failed",
+            `Payment of ${paymentRecord.amount} ${paymentRecord.currency} has failed. Reference: ${paymentRecord.reference}. \n\n PayWave Team`
+          );
+
+          // Create a notification record in the notificationModel
+          await notificationModel.create({
+            merchant: merchant._id,
+            email: merchant.email,
+            subject: "Payment Failed",
+            message: `Payment of ${paymentRecord.amount} ${paymentRecord.currency} has failed. Reference: ${paymentRecord.reference}. \n\n PayWave Team`,
+            date: new Date().toLocaleDateString(),
+            time: new Date().toLocaleTimeString(),
+          });
+
+          console.log("Payment transfer failure handled successfully!");
+        } else {
+          console.error(
+            "Merchant not found for payment transfer:",
+            paymentRecord.merchant
+          );
+        }
+      } else {
+        console.error(
+          "No withdrawal or payment record found for reference:",
+          transferData.reference
+        );
+      }
+    }
+  } catch (err) {
+    console.error("Transfer Failure Handling Error:", err.message);
+  }
+};
 
 // Helper function to handle payout
 const processPayout = async (payoutPayload) => {

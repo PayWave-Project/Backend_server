@@ -1,5 +1,5 @@
-const paymentModel = require("../models/paymentModel");
 const merchantModel = require("../models/merchantModel");
+const transactionModel = require("../models/transactionModel");
 const bankCodeModel = require("../models/banksCodeModel");
 const crypto = require("crypto");
 const axios = require("axios");
@@ -37,6 +37,13 @@ exports.cardPay = async (req, res) => {
     //   }
 
     // Create the payload as per the provided structure
+
+    const { userId } = req.user;
+
+    const merchant = await merchantModel.findById(userId);
+    if (!merchant)
+      return res.status(400).json({ message: "Merchant not found!" });
+
     const paymentPayload = {
       reference: `PYW_card_${Date.now()}`,
       card: {
@@ -80,12 +87,27 @@ exports.cardPay = async (req, res) => {
       }
     );
 
+    const transaction = {
+      merchant: merchant._id,
+      merchantId: merchant.merchantId,
+      currency: response.data.data.currency,
+      email: response.data.data.customer.email,
+      amount: response.data.data.amount,
+      status: response.data.data.status,
+      reference: response.data.data.reference,
+      type: "Card",
+    };
+
     // Handle the response from Korapay
     if (response.data.data.status === "success") {
+      await saveTransaction(transaction);
+
       return res
         .status(200)
         .json({ message: "Payment successful", data: response.data });
     } else {
+      await saveTransaction(transaction);
+
       return res.status(400).json({
         message: "Payment requires additional actions",
         data: response.data,
@@ -114,6 +136,12 @@ exports.cardAuthorize = async (req, res) => {
       });
     }
 
+    const { userId } = req.user;
+
+    const merchant = await merchantModel.findById(userId);
+    if (!merchant)
+      return res.status(400).json({ message: "Merchant not found!" });
+
     // Create `authorization` object with either `pin` or `otp` as the key
     const authorization = pin ? { pin } : { otp };
 
@@ -135,13 +163,19 @@ exports.cardAuthorize = async (req, res) => {
 
     if (response.data.status === "success") {
       // Update payment record in the database
-      const payment = await paymentModel.findOne({
-        reference: transaction_reference,
+      const payment = await transactionModel.findOne({
+        reference: merchant.reference,
       });
       payment.status = "success";
       await payment.save();
       return res.status(200).json(response.data);
     } else {
+      // Update payment record in the database
+      const payment = await transactionModel.findOne({
+        reference: merchant.reference,
+      });
+      payment.status = "failed";
+      await payment.save();
       return res
         .status(400)
         .json({ message: "Authorization failed", data: response.data });
@@ -193,39 +227,6 @@ exports.cardResendOTPPay = async (req, res) => {
   }
 };
 
-// Function for pay with bank transfer without checkout
-// exports.bankTransferPay = async (req, res) => {
-//   try {
-//     const { amount, bankCode, accountNumber, email } = req.body;
-
-//     const response = await axios.post(
-//       `${KORAPAY_API_BASE_URL}/merchant/api/v1/charges/bank-transfer`,
-//       {
-//         amount,
-//         // bank_code: bankCode,
-//         account_name: "Demo account",
-//         currency: "NGN",
-//         reference: `PYW_bank_${Date.now()}`,
-//         customer: {
-//         email: email
-//     }
-//       },
-//       {
-//         headers: {
-//           Authorization: `Bearer ${KORAPAY_SECRET_KEY}`,
-//         },
-//       }
-//     );
-
-//     return res.status(200).json(response.data);
-//   } catch (error) {
-//     return res.status(500).json({
-//       message: "Bank transfer failed: " + error.message,
-//       API_Error: error.response?.data || "No additional error details from API",
-//     });
-//   }
-// };
-
 // Helper function to verify bank account
 const verifyBankAccount = async (bankCode, accountNumber) => {
   try {
@@ -259,11 +260,16 @@ const verifyBankAccount = async (bankCode, accountNumber) => {
   }
 };
 
-
 // Function for pay with bank transfer without checkout
 exports.bankTransferPay = async (req, res) => {
   try {
     const { amount, bankCode, accountNumber, email } = req.body;
+
+    const { userId } = req.user;
+
+    const merchant = await merchantModel.findById(userId);
+    if (!merchant)
+      return res.status(400).json({ message: "Merchant not found!" });
 
     let transferPayload = {
       amount,
@@ -291,15 +297,21 @@ exports.bankTransferPay = async (req, res) => {
       // Check if accountNumber is provided
       if (accountNumber) {
         // Verify the bank account if accountNumber is also provided
-        const verifiedAccount = await verifyBankAccount(bankCode, accountNumber);
+        const verifiedAccount = await verifyBankAccount(
+          bankCode,
+          accountNumber
+        );
         if (!verifiedAccount) {
-          return res.status(400).json({ message: "Invalid bank account details" });
+          return res
+            .status(400)
+            .json({ message: "Invalid bank account details" });
         }
 
         // Add bank code and account number to transfer payload
         transferPayload.bank_code = banksCode.code;
         transferPayload.account_number = accountNumber;
-        transferPayload.account_name = verifiedAccount.account_name || "Demo account"; // Use the verified account name
+        transferPayload.account_name =
+          verifiedAccount.account_name || "Demo account"; // Use the verified account name
       }
     }
 
@@ -314,13 +326,28 @@ exports.bankTransferPay = async (req, res) => {
       }
     );
 
+    const transaction = {
+      merchant: merchant._id,
+      merchantId: merchant.merchantId,
+      currency: response.data.data.currency,
+      email: response.data.data.customer.email,
+      amount: response.data.data.amount,
+      status: response.data.data.status,
+      reference: response.data.data.reference,
+      type: "Transfer",
+    };
+
     // Handle success response
     if (response.data.status === "success") {
+      await saveTransaction(transaction);
+
       return res.status(200).json({
         message: "Bank transfer initiated successfully",
         data: response.data,
       });
     } else {
+      await saveTransaction(transaction);
+
       return res.status(400).json({
         message: "Bank transfer initiation failed",
         data: response.data,
@@ -332,5 +359,148 @@ exports.bankTransferPay = async (req, res) => {
       message: "Bank transfer failed: " + error.message,
       API_Error: error.response?.data || "No additional error details from API",
     });
+  }
+};
+
+
+exports.sendMoney = async (req, res) => {
+  try {
+    const { userId } = req.user;
+    const { amount, beneficiaryBankCode, beneficiaryAccountNumber, email } = req.body;
+
+    // Fetch merchant details
+    const merchant = await merchantModel.findById(userId);
+    if (!merchant) {
+      return res.status(404).json({ message: "Merchant not found" });
+    }
+
+    if (isNaN(amount)) {
+      return res.status(400).json({ message: "Amount must be a valid number!" });
+    }
+
+    if (amount < 1000) {
+      return res.status(400).json({ message: "Amount must be 1000 or above for Payout!" });
+    }
+
+    if (merchant.balance < amount) {
+      return res.status(400).json({ message: "Insufficient account balance." });
+    }
+
+    const bankCode = await bankCodeModel.findOne({ code: beneficiaryBankCode });
+
+    if (!bankCode && !bankCode.code) {
+      return res.status(400).json({ message: "Invalid bank code" });
+    }
+
+    // Verify the bank account
+    const verifiedAccount = await verifyBankAccount(
+      beneficiaryBankCode,
+      beneficiaryAccountNumber
+    );
+    if (!verifiedAccount) {
+      return res.status(400).json({ message: "Invalid bank account details" });
+    }
+
+    // Generate a unique reference for this transaction
+    const payoutReference = `PYW_trn_${Date.now()}`;
+
+    // Prepare the request body
+    const requestBody = {
+      reference: payoutReference,
+      destination: {
+        type: "bank_account",
+        amount: amount,
+        currency: "NGN",
+        narration: "Send money to bank account",
+        bank_account: {
+          bank: beneficiaryBankCode,
+          account: beneficiaryAccountNumber,
+        },
+        customer: {
+          email: email,
+        },
+      },
+    };
+
+    // Encrypt the payment data
+    const encryptedData = encryptAES256(
+      KORAPAY_ENCRYPTION_KEY,
+      JSON.stringify(requestBody)
+    );
+
+    // Call the KoraPay payout API
+    const response = await axios.post(
+      `${KORAPAY_API_BASE_URL}/merchant/api/v1/transactions/disburse`,
+      { encrypted_data: encryptedData },
+      {
+        headers: {
+          Authorization: `Bearer ${KORAPAY_SECRET_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const transaction = {
+      merchant: merchant._id,
+      merchantId: merchant.merchantId,
+      currency: response.data.data.currency,
+      email: response.data.data.customer.email,
+      amount: response.data.data.amount,
+      status: response.data.data.status,
+      reference: response.data.data.reference,
+      type: "Transfer",
+    };
+
+    // Handle response
+    if (
+      response.data.data.status === "success" ||
+      response.data.data.status === "processing"
+    ) {
+      await saveTransaction(transaction);
+
+      // Respond to the client
+      return res.status(200).json({
+        message: "Withdrawal processed successfully",
+        data: response.data,
+      });
+    } else {
+      await saveTransaction(transaction);
+
+      return res.status(400).json({
+        message: "Withdrawal failed",
+        data: response.data,
+      });
+    }
+
+  } catch (error) {
+    return res.status(500).json({
+      message: "Error sending money: " + error.message,
+      API_Error: error.response?.data || "No additional error details from API",
+    });
+  }
+};
+
+
+//Helper function to save transaction details 
+const saveTransaction = async (transactionData) => {
+  try {
+    // Create a new transaction instance
+    const transaction = new transactionModel({
+      merchant: transactionData.merchant,
+      email: transactionData.email,
+      merchantId: transactionData.merchantId,
+      amount: transactionData.amount,
+      currency: transactionData.currency,
+      status: transactionData.status,
+      reference: transactionData.reference,
+      type: transactionData.type,
+    });
+
+    // Save the transaction to the database
+    const savedTransaction = await transaction.save();
+    return savedTransaction;
+  } catch (error) {
+    console.error("Error saving transaction:", error.message);
+    throw new Error("Failed to save transaction");
   }
 };

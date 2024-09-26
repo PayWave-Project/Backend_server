@@ -56,12 +56,20 @@ const merchantSchema = new Schema({
     //     required: true,
     // },
     transactionHistory: [{
-        type: String
-    }],
+        reference: { type: String },
+        amount: { type: Number },
+        status: { type: String },
+        type: { type: String },
+        date: { type: String },
+        time: { type: String },
+      }],
     
-    notification: [{
-        type: String
-    }],
+      notification: [{
+        notificationMessage: { type: String },
+        date: { type: String }, 
+        time: { type: String },
+      }],
+
     status: {
         type: String,
         lowercase: true,
@@ -97,7 +105,8 @@ const merchantSchema = new Schema({
         }
     },
     balance: {
-        type: Number
+        type: Number,
+        default: 0
     },
 
 }, { timestamps: true });

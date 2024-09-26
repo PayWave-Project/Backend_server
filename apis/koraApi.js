@@ -10,7 +10,7 @@ const verifyBVNWithKoraPay = async (BVN) => {
         
       const response = await axios.post(
         `${KORAPAY_API_URL}/identities/ng/bvn`,
-        { id: BVN },
+        { id: BVN, verification_consent: true },
         {
           headers: {
             Authorization: `Bearer ${KORAPAY_SECRET_KEY}`,
@@ -38,6 +38,7 @@ async function verifyCACWithKoraPay(CAC) {
       `${KORAPAY_API_URL}/identities/ng/cac`,
       {
         id: CAC,
+        verification_consent: true
       },
       {
         headers: {

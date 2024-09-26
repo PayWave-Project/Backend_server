@@ -35,6 +35,7 @@ const generateOTP = () => {
 
 async function createVirtualAccount(merchantDetail, merchantID) {
   try {
+
     const response = await axios.post(
       `${KORAPAY_API_URL}/virtual-bank-account`,
       {
@@ -847,3 +848,62 @@ exports.uploaAPhoto = async (req, res) => {
     }
   }
 };
+
+
+// Function to complete merchant KYC verification
+exports.merchantKYC = async (req, res) => {
+  try {
+    const {userId} = req.user;
+    const merchant = await findById(userId);
+    if (!merchant) return res.status(400).json({ message: "Merchant not found!" });
+
+    const { BVN, CAC } = req.body;
+    if (!BVN || !CAC) return res.status(400).json({ message: "Enter a valid BVN and CAC number" });
+
+    const [verifiedBVN, verifiedCAC] = await Promise.all([
+      verifyBVNWithKoraPay(BVN),
+      verifyCACWithKoraPay(CAC)
+    ]);
+
+    if (!verifiedBVN.isValid || verifiedBVN.first_name.toLowerCase() !== merchant.firstName.toLowerCase() || verifiedBVN.last_name.toLowerCase() !== merchant.lastName.toLowerCase()) {
+      return res.status(400).json({ message: "BVN data does not match our records!" })
+    }
+
+    if (!verifiedCAC.isValid || verifiedCAC.name !== merchant.businessName) {
+      return res.status(400).json({ message: "CAC data does not match our records!" })
+    }
+
+    const merchantDetails = {
+      email: merchant.email,
+      businessName: merchant.businessName,
+      BVN: merchant.BVN,
+    }
+
+    const virtualAcct = await createVirtualAccount(merchantDetails, merchant.merchantID);
+    if (!virtualAcct) {
+      return res.status(400).json({ message: "Failed to create merchant virtual account!" })
+    }
+
+    // Save the merchant virtual account details to database 
+    const bankDetails = {
+      accountName: virtualAcct.account_name,
+      accountNumber: virtualAcct.account_number,
+      bankName: virtualAcct.bank_name,
+      bankCode: virtualAcct.bank_code,
+    }
+
+    const updatedBankDetails = await merchantModel.findByIdAndUpdate(userId, { bankAccountDetails: bankDetails }, {new: true});
+    if (!updatedBankDetails) return res.status(400).json({ message: "Unable to update merchant bank details" });
+
+    return res.status(200).json({ 
+      message: "Merchant KYC verification successful!",
+      data: bankDetails
+    })
+
+  } catch (error) {
+    return res.status(500).json({
+      message: "Internal server error: " + error.message,
+      API_Error: error.response?.data || "No additional error details from API",
+    });
+  }
+}
