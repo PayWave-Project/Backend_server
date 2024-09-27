@@ -37,7 +37,6 @@ router.get("/get-merchant", authenticate, getUser);
 //endpoint for merchant KYC verification
 router.post('/merchant-kyc', authenticate, merchantKYC);
 
-
 //endpoint to sign out a merchant
 router.post("/signout-merchant/:id", authenticate, signOut);
 
