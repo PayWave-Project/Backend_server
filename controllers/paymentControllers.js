@@ -385,3 +385,45 @@ exports.getMerchantPaymentHistory = async (req, res) => {
     });
   }
 };
+
+
+
+// Function to get merchant transactions history
+exports.getAllBankCode = async (req, res) => {
+  try {
+    const { userId } = req.user;
+
+    // Get the page number and limit from query parameters, with default values
+    const page = parseInt(req.query.page) || 1; 
+    const limit = parseInt(req.query.limit) || 10; 
+    const skip = (page - 1) * limit; 
+
+    const merchant = await merchantModel.findById(userId)
+
+    if (!merchant) {
+      return res.status(400).json({ message: "merchant not found!" });
+    }
+
+    // Fetch merchant transactions history with pagination
+    const transactionHistory = merchant.transactionHistory.skip(skip).limit(limit);
+
+    // Get the total number of bank codes for pagination info
+    const totaltransactionHistory = transactionHistory.length;
+
+    return res.status(200).json({
+      message: "List of banks in Nigeria and their bank code",
+      data: bankCode,
+      pagination: {
+        total: totaltransactionHistory,
+        page: page,
+        limit: limit,
+        totalPages: Math.ceil(totaltransactionHistory / limit),
+      },
+    });
+    
+  } catch (error) {
+    return res.status(500).json({
+      message: "Internal Server Error: " + error.message,
+    });
+  }
+};
