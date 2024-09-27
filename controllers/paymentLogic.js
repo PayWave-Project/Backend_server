@@ -28,13 +28,16 @@ exports.cardPay = async (req, res) => {
   try {
     const { cardDetails, amount, email } = req.body;
     //cardDetails are  {
-    //   	"name": "Test Cards", // optional
+    //   	  "name": "Test Cards", // optional
     //       "number": "5130000052131820",
     //       "cvv": "419",
     //       "expiry_month": "12",
     //       "expiry_year": "32",
     //       "pin": "0000" // optional
     //   }
+
+    if (!email) return res.status(400).json({ message: "Enter a valid email address!" });
+    if (!cardDetails) return res.status(400).json({ message: "Invalid card details format!" });
 
     // Create the payload as per the provided structure
 
@@ -43,6 +46,14 @@ exports.cardPay = async (req, res) => {
     const merchant = await merchantModel.findById(userId);
     if (!merchant)
       return res.status(400).json({ message: "Merchant not found!" });
+
+    if (isNaN(amount)) {
+      return res.status(400).json({ message: "Amount must be a valid number!" });
+    }
+
+    if (amount < 100) {
+      return res.status(400).json({ message: "Amount must be 100 or above!" });
+    }
 
     const paymentPayload = {
       reference: `PYW_card_${Date.now()}`,
@@ -56,12 +67,14 @@ exports.cardPay = async (req, res) => {
       },
       amount: amount,
       currency: "NGN",
-      redirect_url: "https://korapay.com",
+      redirect_url: "https://app-paywave.vercel.app",
+      merchant_bears_cost: false,
       customer: {
         email: email,
       },
       metadata: {
-        test01: "123456",
+        merchantId: merchant.merchantId,
+        merchantName: `${merchant.firstName} ${merchant.lastName}`
       },
     };
 
@@ -102,9 +115,7 @@ exports.cardPay = async (req, res) => {
     if (response.data.data.status === "success") {
       await saveTransaction(transaction);
 
-      return res
-        .status(200)
-        .json({ message: "Payment successful", data: response.data });
+      return res.status(200).json({ message: "Payment successful", data: response.data });
     } else {
       await saveTransaction(transaction);
 
@@ -176,9 +187,7 @@ exports.cardAuthorize = async (req, res) => {
       });
       payment.status = "failed";
       await payment.save();
-      return res
-        .status(400)
-        .json({ message: "Authorization failed", data: response.data });
+      return res.status(400).json({ message: "Authorization failed", data: response.data });
     }
   } catch (error) {
     return res.status(500).json({
@@ -193,9 +202,7 @@ exports.cardResendOTPPay = async (req, res) => {
   const { transaction_reference } = req.body;
 
   if (!transaction_reference) {
-    return res
-      .status(400)
-      .json({ message: "Please provide the transaction reference." });
+    return res.status(400).json({ message: "Please provide the transaction reference." });
   }
 
   try {
@@ -211,13 +218,9 @@ exports.cardResendOTPPay = async (req, res) => {
     );
 
     if (response.data.status === "success") {
-      return res
-        .status(200)
-        .json({ message: "OTP resent successfully", data: response.data });
+      return res.status(200).json({ message: "OTP resent successfully", data: response.data });
     } else {
-      return res
-        .status(400)
-        .json({ message: "Failed to resend OTP", data: response.data });
+      return res.status(400).json({ message: "Failed to resend OTP", data: response.data });
     }
   } catch (error) {
     return res.status(500).json({
@@ -265,11 +268,20 @@ exports.bankTransferPay = async (req, res) => {
   try {
     const { amount, bankCode, accountNumber, email } = req.body;
 
+    if (!email) return res.status(400).json({ message: "Enter a valid email address!" });
+
     const { userId } = req.user;
 
     const merchant = await merchantModel.findById(userId);
-    if (!merchant)
-      return res.status(400).json({ message: "Merchant not found!" });
+    if (!merchant) return res.status(400).json({ message: "Merchant not found!" });
+
+    if (isNaN(amount)) {
+      return res.status(400).json({ message: "Amount must be a valid number!" });
+    }
+
+    if (amount < 100) {
+      return res.status(400).json({ message: "Amount must be 100 or above!" });
+    }
 
     let transferPayload = {
       amount,
@@ -279,10 +291,10 @@ exports.bankTransferPay = async (req, res) => {
       merchant_bears_cost: false,
       customer: {
         email: email,
-        name: "Demo account",
       },
       metadata: {
-        purpose: "Payment via bank transfer",
+        merchantId: merchant.merchantId,
+        merchantName: `${merchant.firstName} ${merchant.lastName}`
       },
     };
 
@@ -302,9 +314,7 @@ exports.bankTransferPay = async (req, res) => {
           accountNumber
         );
         if (!verifiedAccount) {
-          return res
-            .status(400)
-            .json({ message: "Invalid bank account details" });
+          return res.status(400).json({ message: "Invalid bank account details" });
         }
 
         // Add bank code and account number to transfer payload
@@ -349,7 +359,7 @@ exports.bankTransferPay = async (req, res) => {
       await saveTransaction(transaction);
 
       return res.status(400).json({
-        message: "Bank transfer initiation failed",
+        message: "Bank transfer initiation processing",
         data: response.data,
       });
     }
@@ -366,7 +376,11 @@ exports.bankTransferPay = async (req, res) => {
 exports.sendMoney = async (req, res) => {
   try {
     const { userId } = req.user;
-    const { amount, beneficiaryBankCode, beneficiaryAccountNumber, email } = req.body;
+    const { amount, beneficiaryBankCode, beneficiaryAccountNumber, email, description } = req.body;
+
+    if (!amount || !email || !beneficiaryBankCode ||!beneficiaryAccountNumber) {
+      return res.status(400).json({ message: "Enter amount, email address, account number and bank code!"});
+    }
 
     // Fetch merchant details
     const merchant = await merchantModel.findById(userId);
@@ -411,7 +425,7 @@ exports.sendMoney = async (req, res) => {
         type: "bank_account",
         amount: amount,
         currency: "NGN",
-        narration: "Send money to bank account",
+        narration: description,
         bank_account: {
           bank: beneficiaryBankCode,
           account: beneficiaryAccountNumber,
@@ -419,6 +433,10 @@ exports.sendMoney = async (req, res) => {
         customer: {
           email: email,
         },
+      },
+      metadata: {
+        merchantId: merchant.merchantId,
+        merchantName: `${merchant.firstName} ${merchant.lastName}`
       },
     };
 

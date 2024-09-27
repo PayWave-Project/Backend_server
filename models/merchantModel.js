@@ -47,14 +47,12 @@ const merchantSchema = new Schema({
         type: Boolean, 
         default: false 
     },
-    // BVN: {
-    //     type: String,
-    //     required: true,
-    // },
-    // CAC: {
-    //     type: String,
-    //     required: true,
-    // },
+    BVN: {
+        type: String,
+    },
+    CAC: {
+        type: String,
+    },
     transactionHistory: [{
         reference: { type: String },
         amount: { type: Number },
@@ -76,6 +74,10 @@ const merchantSchema = new Schema({
         default: "not-verified"
     },
     isVerified: {
+        type: Boolean,
+        default: false
+    },
+    isKYCverified: {
         type: Boolean,
         default: false
     },

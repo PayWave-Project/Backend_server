@@ -94,8 +94,11 @@ const verifyBankAccount = async (bankCode, accountNumber) => {
 exports.withdrawFunds = async (req, res) => {
   try {
     const { userId } = req.user;
-    const { amount, beneficiaryBankCode, beneficiaryAccountNumber, email } =
-      req.body;
+    const { amount, beneficiaryBankCode, beneficiaryAccountNumber, email } = req.body;
+
+    if (!amount || !email || !beneficiaryBankCode ||!beneficiaryAccountNumber) {
+      return res.status(400).json({ message: "Enter amount, email address, account number and bank code!"});
+    }
 
     // Fetch merchant details
     const merchant = await merchantModel.findById(userId);
@@ -104,15 +107,11 @@ exports.withdrawFunds = async (req, res) => {
     }
 
     if (isNaN(amount)) {
-      return res
-        .status(400)
-        .json({ message: "Amount must be a valid number!" });
+      return res.status(400).json({ message: "Amount must be a valid number!" });
     }
 
     if (amount < 1000) {
-      return res
-        .status(400)
-        .json({ message: "Amount must be 1000 or above for Payout!" });
+      return res.status(400).json({ message: "Amount must be 1000 or above for Payout!" });
     }
 
     if (merchant.balance < amount) {
@@ -152,6 +151,10 @@ exports.withdrawFunds = async (req, res) => {
         customer: {
           email: email,
         },
+      },
+      metadata: {
+        merchantId: merchant.merchantId,
+        merchantName: `${merchant.firstName} ${merchant.lastName}`
       },
     };
 
