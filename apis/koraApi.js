@@ -1,15 +1,13 @@
 const axios = require("axios");
 const KORAPAY_API_URL = process.env.KORAPAY_API_URL;
+const KORAPAY_API_BASE_URL = process.env.KORAPAY_API_BASE_URL;
 const KORAPAY_SECRET_KEY = process.env.KORAPAY_SECRET_KEY;
 
 
 const verifyBVNWithKoraPay = async (BVN) => {
-    try {
-        console.log(`Attempting to verify BVN: ${BVN}`);
-        console.log(`API URL: ${KORAPAY_API_URL}/identities/ng/bvn`);
-        
+    try {       
       const response = await axios.post(
-        `${KORAPAY_API_URL}/identities/ng/bvn`,
+        `${KORAPAY_API_BASE_URL}/api/v1/identities/ng/bvn`,
         { id: BVN, verification_consent: true },
         {
           headers: {
@@ -18,8 +16,6 @@ const verifyBVNWithKoraPay = async (BVN) => {
           },
         }
       );
-      console.log('KoraPay API Response:', JSON.stringify(response.data, null, 2));
-  
       return {
         isValid: response.data.status === "true",
         data: response.data.data,
@@ -35,7 +31,7 @@ const verifyBVNWithKoraPay = async (BVN) => {
 async function verifyCACWithKoraPay(CAC) {
   try {
     const response = await axios.post(
-      `${KORAPAY_API_URL}/identities/ng/cac`,
+      `${KORAPAY_API_BASE_URL}/api/v1/identities/ng/cac`,
       {
         id: CAC,
         verification_consent: true
