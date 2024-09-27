@@ -710,16 +710,20 @@ exports.signOut = async (req, res) => {
 
 exports.getUser = async (req, res) => {
   try {
-    const id = req.user.userId;
-    const merchant = await merchantModel.findById(id);
+    const { userId } = req.user;
+    const merchant = await merchantModel.findById(userId);
     if (!merchant) {
       return res.status(404).json({
         message: "Merchant not found",
       });
     }
 
+    // Exclude the password, otp etc
+    const { password: _, otp, otpExpiry, otpAttempts, ...merchantDetails } = merchant.toObject();
+
     return res.status(200).json({
-      merchant: merchant,
+      message: "Merchant Profile successfully fetched!",
+      data: merchantDetails,
     });
   } catch (error) {
     return res.status(500).json({
