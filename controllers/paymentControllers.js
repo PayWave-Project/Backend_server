@@ -352,78 +352,152 @@ exports.confirmPayment = async (req, res) => {
   }
 };
 
-// Function to get merchant payments history through their virtual bank accounts
-exports.getMerchantPaymentHistory = async (req, res) => {
-  try {
-    const { accountNumber } = req.params;
+// // Function to get merchant payments history through their virtual bank accounts
+// exports.getMerchantPaymentHistory = async (req, res) => {
+//   try {
+//     const { accountNumber } = req.params;
 
-    if (!accountNumber) {
-      return res.status(400).send({ error: "Missing account" });
-    }
+//     if (!accountNumber) {
+//       return res.status(400).send({ error: "Missing account" });
+//     }
 
-    // Korapay Virtual bank account transaction history
-    const response = axios.get(
-      `${KORAPAY_API_BASE_URL}/merchant/api/v1/virtual-bank-account/transactions?account_number=${accountNumber}`,
-      {},
-      {
-        headers: {
-          Authorization: `Bearer ${KORAPAY_SECRET_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
+//     // Korapay Virtual bank account transaction history
+//     const response = axios.get(
+//       `${KORAPAY_API_BASE_URL}/merchant/api/v1/virtual-bank-account/transactions?account_number=${accountNumber}`,
+//       {},
+//       {
+//         headers: {
+//           Authorization: `Bearer ${KORAPAY_SECRET_KEY}`,
+//           "Content-Type": "application/json",
+//         },
+//       }
+//     );
 
-    const paymentData = response.data;
+//     const paymentData = response.data;
 
-    if (paymentData.data.status !== "success") {
-      return res.status(400).send({ error: "Payment verification failed" });
-    }
-  } catch (error) {
-    return res.status(500).json({
-      message: "Internal Server Error",
-      error: error.message,
-    });
-  }
-};
+//     if (paymentData.data.status !== "success") {
+//       return res.status(400).send({ error: "Payment verification failed" });
+//     }
+//   } catch (error) {
+//     return res.status(500).json({
+//       message: "Internal Server Error",
+//       error: error.message,
+//     });
+//   }
+// };
 
 
 
 // Function to get merchant transactions history
-exports.getAllBankCode = async (req, res) => {
+exports.getMerchantTransactionHistory = async (req, res) => {
   try {
     const { userId } = req.user;
 
     // Get the page number and limit from query parameters, with default values
-    const page = parseInt(req.query.page) || 1; 
-    const limit = parseInt(req.query.limit) || 10; 
-    const skip = (page - 1) * limit; 
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
 
-    const merchant = await merchantModel.findById(userId)
+    // Find the merchant by userId
+    const merchant = await merchantModel.findById(userId);
 
     if (!merchant) {
-      return res.status(400).json({ message: "merchant not found!" });
+      return res.status(400).json({ message: "Merchant not found!" });
     }
 
-    // Fetch merchant transactions history with pagination
-    const transactionHistory = merchant.transactionHistory.skip(skip).limit(limit);
+    // Get the transaction history array from the merchant document
+    const transactionHistory = merchant.transactionHistory || [];
 
-    // Get the total number of bank codes for pagination info
-    const totaltransactionHistory = transactionHistory.length;
+    // Get the total number of transactions for pagination info
+    const totalTransactionHistory = transactionHistory.length;
+
+    // Apply pagination by slicing the array
+    const paginatedTransactionHistory = transactionHistory.slice(skip, skip + limit);
 
     return res.status(200).json({
-      message: "List of banks in Nigeria and their bank code",
-      data: bankCode,
+      message: "Merchant transaction history retrieved successfully",
+      data: paginatedTransactionHistory,
       pagination: {
-        total: totaltransactionHistory,
+        total: totalTransactionHistory,
         page: page,
         limit: limit,
-        totalPages: Math.ceil(totaltransactionHistory / limit),
+        totalPages: Math.ceil(totalTransactionHistory / limit),
       },
     });
-    
+
   } catch (error) {
     return res.status(500).json({
       message: "Internal Server Error: " + error.message,
     });
   }
 };
+
+
+
+// Function to get merchant notifications
+exports.getMerchantNotification = async (req, res) => {
+  try {
+    const { userId } = req.user;
+
+    // Get the page number and limit from query parameters, with default values
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    // Find the merchant by userId
+    const merchant = await merchantModel.findById(userId);
+
+    if (!merchant) {
+      return res.status(400).json({ message: "Merchant not found!" });
+    }
+
+    // Get the notification array from the merchant document
+    const notifications = merchant.notification || [];
+
+    // Get the total number of notifications for pagination info
+    const totalnotifications = notifications.length;
+
+    // Apply pagination by slicing the array
+    const paginatedNotifications = notifications.slice(skip, skip + limit);
+
+    return res.status(200).json({
+      message: "Merchant notifications retrieved successfully",
+      data: paginatedNotifications,
+      pagination: {
+        total: totalnotifications,
+        page: page,
+        limit: limit,
+        totalPages: Math.ceil(totalnotifications / limit),
+      },
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      message: "Internal Server Error: " + error.message,
+    });
+  }
+};
+
+
+// Function to get merchant account balance
+exports.getMerchantAccountBalance = async (req, res) => {
+  try {
+    const { userId } = req.user;
+    if (!userId) return res.status(400).json({ message: "Invalid token, please login to continue" });
+
+    const merchant = await merchantModel.findById(userId);
+    if (!merchant) return res.status(404).json({ message: "Merchant not found" });
+
+    const accountBalance = merchant.balance; 
+
+    return res.status(200).json({ 
+      message: "Account balance retrieved successfully!", 
+      balance: accountBalance 
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      message: "Internal Server Error: " + error.message,
+    });
+  }
+}
