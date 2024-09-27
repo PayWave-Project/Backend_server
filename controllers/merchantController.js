@@ -858,7 +858,7 @@ exports.uploaAPhoto = async (req, res) => {
 exports.merchantKYC = async (req, res) => {
   try {
     const {userId} = req.user;
-    const merchant = await findById(userId);
+    const merchant = await merchantModel.findById(userId);
     if (!merchant) return res.status(400).json({ message: "Merchant not found!" });
 
     const { BVN, CAC } = req.body;
