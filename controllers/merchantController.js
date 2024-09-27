@@ -896,7 +896,7 @@ exports.merchantKYC = async (req, res) => {
       bankCode: virtualAcct.bank_code,
     }
 
-    const updatedBankDetails = await merchantModel.findByIdAndUpdate(userId, { bankAccountDetails: bankDetails }, {new: true});
+    const updatedBankDetails = await merchantModel.findByIdAndUpdate(userId, { bankAccountDetails: bankDetails, isKYCverified: true }, {new: true});
     if (!updatedBankDetails) return res.status(400).json({ message: "Unable to update merchant bank details" });
 
     return res.status(200).json({ 

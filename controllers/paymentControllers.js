@@ -2,6 +2,7 @@ const paymentModel = require("../models/paymentModel");
 const merchantModel = require("../models/merchantModel");
 const axios = require("axios");
 const QRCode = require("qrcode");
+const sharp = require('sharp');
 require("dotenv").config();
 
 const KORAPAY_API_BASE_URL = process.env.KORAPAY_API_BASE_URL;
@@ -27,6 +28,14 @@ exports.generateQRCode = async (req, res) => {
     const merchant = await merchantModel.findById(userId);
     if (!merchant) {
       return res.status(404).json({ message: "Merchant not found" });
+    }
+
+    if (isNaN(amount)) {
+      return res.status(400).json({ message: "Amount must be a valid number!" });
+    }
+
+    if (amount < 100) {
+      return res.status(400).json({ message: "Amount must be 100 or above!" });
     }
 
     const expirationTime =
@@ -81,29 +90,47 @@ exports.generateQRCode = async (req, res) => {
     if (!data || !data.checkout_url) {
       return res.status(500).json({
         message: "Invalid Korapay API response",
-        API_Error:
-          korapayResponse.data || "No additional error details from API",
+        API_Error: korapayResponse.data || "No additional error details from API",
       });
     }
 
     const { checkout_url } = data;
-
     newPayment.checkout_url = checkout_url;
 
-    // const scanUrl = `${req.protocol}://${req.get('host')}/api/v1/scan/${newPayment.type}/${newPayment.reference}`;
-    // const qrCodeDataURL = await QRCode.toDataURL(scanUrl);
+    // Generate the QR code
+    const scanUrl = `${req.protocol}://${req.get("host")}/scan?type=${newPayment.type}&reference=${newPayment.reference}`;
+    const qrCodeBuffer = await QRCode.toBuffer(scanUrl, {
+      errorCorrectionLevel: 'H', 
+      type: 'png',
+      width: 500,
+    });
 
-    const scanUrl = `${req.protocol}://${req.get("host")}/scan?type=${
-      newPayment.type
-    }&reference=${newPayment.reference}`;
-    const qrCodeDataURL = await QRCode.toDataURL(scanUrl);
+    // Load the logo from URL
+    const logoUrl = 'https://res.cloudinary.com/dx6qmw7w9/image/upload/v1727458166/paywave-icon1_bdhskd.png';
+    const logoResponse = await axios({
+      url: logoUrl,
+      responseType: 'arraybuffer',
+    });
+    const logoBuffer = Buffer.from(logoResponse.data);
 
-    newPayment.qrCode = qrCodeDataURL;
+    // Resize logo to 80x80 pixels
+    const resizedLogoBuffer = await sharp(logoBuffer).resize(80, 80).toBuffer();
+
+    // Use Sharp to overlay the logo onto the QR code
+    const finalQRCodeImage = await sharp(qrCodeBuffer)
+      .composite([{ input: resizedLogoBuffer, gravity: 'center' }]) 
+      .toBuffer();
+
+    // Convert final image to base64
+    const finalQRCodeDataURL = `data:image/png;base64,${finalQRCodeImage.toString('base64')}`;
+
+    // Save QR code to payment record
+    newPayment.qrCode = finalQRCodeDataURL;
     await newPayment.save();
 
     return res.status(201).json({
       message: "QR Payment successfully generated!",
-      qrCode: qrCodeDataURL,
+      qrCode: finalQRCodeDataURL,
       reference: newPayment.reference,
       // paymentUrl: checkout_url,
     });
@@ -165,6 +192,14 @@ exports.scanStaticCustomQRCode = async (req, res) => {
 
     if (!payment) {
       return res.status(404).json({ message: "Payment not found" });
+    }
+
+    if (isNaN(amount)) {
+      return res.status(400).json({ message: "Amount must be a valid number!" });
+    }
+
+    if (amount < 100) {
+      return res.status(400).json({ message: "Amount must be 100 or above!" });
     }
 
     if (payment.status === "success") {
