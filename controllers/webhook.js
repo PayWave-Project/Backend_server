@@ -43,19 +43,21 @@ exports.webhook = async (req, res) => {
     // Prevent duplicate event processing (check by transaction reference)
     const existingEvent = await paymentModel.findOne({
       reference: event.data.reference,
-      status: "success"
+      status: "success",
     });
     const existingEventW = await withdrawModel.findOne({
       reference: event.data.reference,
-      status: "success"
+      status: "success",
     });
     const existingEventT = await transactionModel.findOne({
       reference: event.data.reference,
-      status: "success"
+      status: "success",
     });
 
-    if ((existingEvent) || (existingEventW) || (existingEventT)) {
-      console.log(`Event with reference ${event.data.reference} already processed.`);
+    if (existingEvent || existingEventW || existingEventT) {
+      console.log(
+        `Event with reference ${event.data.reference} already processed.`
+      );
       return res.status(200).json({ message: "Event already processed" });
     }
 
@@ -155,38 +157,37 @@ const handleChargeSuccess = async (event) => {
     // Save the updated merchant and payment records concurrently
     await Promise.all([merchant.save(), paymentRecord.save()]);
 
-const emailBody = `Customer payment of ${paymentRecord.amount} ${paymentRecord.currency} was successful. Reference: ${paymentRecord.reference}. \n\n PayWave Team`;
-const recipients = [merchant.email, paymentRecord.email];
+    const emailBody = `Customer payment of ${paymentRecord.amount} ${paymentRecord.currency} was successful. Reference: ${paymentRecord.reference}. \n\n PayWave Team`;
+    const recipients = [merchant.email, paymentRecord.email];
 
-// Function to send notifications
-const sendNotifications = async (recipients, body) => {
-  const emailPromises = recipients.map((recipient) => {
-    const emailHTML = notificationEmail(recipient, body);
+    // Function to send notifications
+    const sendNotifications = async (recipients, body) => {
+      const emailPromises = recipients.map((recipient) => {
+        const emailHTML = notificationEmail(recipient, body);
 
-    return sendEmailNotification({
-      email: recipient,
-      subject: "Payment Successful",
-      html: emailHTML,
-    });
-  });
+        return sendEmailNotification({
+          email: recipient,
+          subject: "Payment Successful",
+          html: emailHTML,
+        });
+      });
 
-  // Wait for all emails to be sent
-  await Promise.all(emailPromises);
+      // Wait for all emails to be sent
+      await Promise.all(emailPromises);
 
-  // Create notification record only for the merchant
-  await notificationModel.create({
-    merchant: merchant._id,
-    email: paymentRecord.email,
-    subject: "Payment Successful",
-    message: body,
-    date: new Date().toLocaleDateString(),
-    time: new Date().toLocaleTimeString(),
-  });
-};
+      // Create notification record only for the merchant
+      await notificationModel.create({
+        merchant: merchant._id,
+        email: paymentRecord.email,
+        subject: "Payment Successful",
+        message: body,
+        date: new Date().toLocaleDateString(),
+        time: new Date().toLocaleTimeString(),
+      });
+    };
 
-// Call the function to send notifications
-await sendNotifications(recipients, emailBody);
-
+    // Call the function to send notifications
+    await sendNotifications(recipients, emailBody);
 
     console.log(
       "Payment verification and merchant notification completed successfully!"
@@ -253,38 +254,36 @@ const handleChargeFailed = async (event) => {
     await merchant.save();
 
     const failedEmailBody = `Customer payment of ${paymentRecord.amount} ${paymentRecord.currency} has failed. Reference: ${paymentRecord.reference}. \n\n PayWave Team`;
-    const Recipients = [merchant.email, paymentRecord.email];
+    const recipients = [merchant.email, paymentRecord.email];
 
     // Function to send notifications for failed payment
     const sendFailedPaymentNotifications = async (recipients, body) => {
-      const notificationPromises = recipients.map(async (recipient) => {
-        // Generate dynamic email HTML for each recipient
+      const emailPromises = recipients.map((recipient) => {
         const emailHTML = notificationEmail(recipient, body);
 
-        // Send notification email and create notification record concurrently
-        return Promise.all([
-          sendEmailNotification({
-            email: recipient,
-            subject: "Payment Failed",
-            html: emailHTML,
-          }),
-          notificationModel.create({
-            merchant: merchant._id,
-            email: recipient,
-            subject: "Payment Failed",
-            message: body,
-            date: new Date().toLocaleDateString(),
-            time: new Date().toLocaleTimeString(),
-          }),
-        ]);
+        return sendEmailNotification({
+          email: recipient,
+          subject: "Payment Failed",
+          html: emailHTML,
+        });
       });
 
-      // Wait for all notifications to be sent
-      await Promise.all(notificationPromises);
+      // Wait for all emails to be sent
+      await Promise.all(emailPromises);
+
+      // Create notification record only for the merchant
+      await notificationModel.create({
+        merchant: merchant._id,
+        email: paymentRecord.email,
+        subject: "Payment Failed",
+        message: body,
+        date: new Date().toLocaleDateString(),
+        time: new Date().toLocaleTimeString(),
+      });
     };
 
     // Call the function to send failed payment notifications
-    await sendFailedPaymentNotifications(Recipients, failedEmailBody);
+    await sendFailedPaymentNotifications(recipients, failedEmailBody);
 
     console.log("Payment failure handled successfully!");
   } catch (err) {
