@@ -864,18 +864,18 @@ exports.merchantKYC = async (req, res) => {
     const { BVN, CAC } = req.body;
     if (!BVN || !CAC) return res.status(400).json({ message: "Enter a valid BVN and CAC number" });
 
-    const [verifiedBVN, verifiedCAC] = await Promise.all([
-      verifyBVNWithKoraPay(BVN),
-      verifyCACWithKoraPay(CAC)
-    ]);
+    // const [verifiedBVN, verifiedCAC] = await Promise.all([
+    //   verifyBVNWithKoraPay(BVN),
+    //   verifyCACWithKoraPay(CAC)
+    // ]);
 
-    if (!verifiedBVN.isValid || verifiedBVN.first_name.toLowerCase() !== merchant.firstName.toLowerCase() || verifiedBVN.last_name.toLowerCase() !== merchant.lastName.toLowerCase()) {
-      return res.status(400).json({ message: "BVN data does not match our records!" })
-    }
+    // if (!verifiedBVN.isValid || verifiedBVN.first_name.toLowerCase() !== merchant.firstName.toLowerCase() || verifiedBVN.last_name.toLowerCase() !== merchant.lastName.toLowerCase()) {
+    //   return res.status(400).json({ message: "BVN data does not match our records!" })
+    // }
 
-    if (!verifiedCAC.isValid || verifiedCAC.name !== merchant.businessName) {
-      return res.status(400).json({ message: "CAC data does not match our records!" })
-    }
+    // if (!verifiedCAC.isValid || verifiedCAC.name !== merchant.businessName) {
+    //   return res.status(400).json({ message: "CAC data does not match our records!" })
+    // }
 
     const merchantDetails = {
       email: merchant.email,
@@ -883,7 +883,7 @@ exports.merchantKYC = async (req, res) => {
       BVN: merchant.BVN,
     }
 
-    const virtualAcct = await createVirtualAccount(merchantDetails, merchant.merchantID);
+    const virtualAcct = await createVirtualAccount(merchantDetails, merchant.merchantId);
     if (!virtualAcct) {
       return res.status(400).json({ message: "Failed to create merchant virtual account!" })
     }
