@@ -22,6 +22,11 @@ async function hashCAC(cac) {
     return await hashSensitiveData(cac);
 }
 
+// Function to hash Auth PIN
+async function hashPIN(authPIN) {
+    return await hashSensitiveData(authPIN);
+}
+
 // Function to verify hashed data
 async function verifyHash(plaintext, hash) {
     return await bcrypt.compare(plaintext, hash);
@@ -32,6 +37,7 @@ module.exports = {
     hashPassword,
     hashBVN,
     hashCAC,
+    hashPIN,
     verifyHash
 };
 

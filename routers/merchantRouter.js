@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { registerMerchant, verify, logIn, forgotPassword, resetPassword, signOut, resendOTP, getUser, uploaAPhoto, verifyOTP, resendOTPforResetPassword, merchantKYC, } = require('../controllers/merchantController');
+const { registerMerchant, verify, logIn, forgotPassword, resetPassword, signOut, resendOTP, getUser, uploaAPhoto, verifyOTP, resendOTPforResetPassword, merchantKYC, createAuthPIN, } = require('../controllers/merchantController');
 const { authenticate, Admin, } = require('../middleware/authentication');
 const { upload } = require('../middleware/multer');
 
@@ -39,6 +39,9 @@ router.post('/merchant-kyc', authenticate, merchantKYC);
 
 //endpoint to sign out a merchant
 router.post("/signout-merchant/:id", authenticate, signOut);
+
+//Endpoint to add a PIN for transactions
+router.post("/add-pin", authenticate, createAuthPIN);
 
 
 

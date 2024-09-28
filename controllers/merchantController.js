@@ -11,7 +11,7 @@ const {
   validateMerchant,
   validateResetPassword,
 } = require("../middleware/validator");
-const { hashPassword, hashBVN, hashCAC } = require("../utils/hashUtilis");
+const { hashPassword, hashPIN, hashBVN, hashCAC } = require("../utils/hashUtilis");
 const {
   verifyCACWithKoraPay,
   verifyBVNWithKoraPay,
@@ -912,3 +912,28 @@ exports.merchantKYC = async (req, res) => {
     });
   }
 }
+
+
+// Funtion to create / update merchant Auth PIN 
+exports.createAuthPIN = async (req, res) => {
+  try {
+    const {userId} = req.user;
+    const merchant = await merchantModel.findById(userId);
+    if (!merchant) return res.status(400).json({ message: "Merchant not found!" });
+
+    const { authPIN } = req.body;
+    if (!authPIN) return res.status(400).json({ message: "Please enter your authentication PIN for transfer." });
+
+    const hashedPIN = await hashPIN(authPIN);
+
+    merchant.authPIN = hashedPIN;
+    await merchant.save();
+
+    return res.status(201).json({ message: "Authentication PIN successfully set!" });
+
+  } catch (error) {
+    return res.status(500).json({
+      message: "Internal server error: " + error.message,
+    });
+  }
+};
