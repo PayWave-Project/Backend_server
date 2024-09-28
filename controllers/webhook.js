@@ -170,11 +170,7 @@ try {
     console.log(`Sending email to: ${recipient}`);
     const emailHTML = notificationEmail(recipient, emailBody);
 
-    await sendEmailNotification({
-      email: recipient,
-      subject: "Payment Successful",
-      html: emailHTML,
-    });
+    await sendEmailNotification(recipient, "Payment Successful", emailHTML);
   }
 
   // Create notification record for the merchant
@@ -262,11 +258,7 @@ try {
   for (const recipient of recipients) {
     const emailHTML = notificationEmail(recipient, failedEmailBody);
 
-    await sendEmailNotification({
-      email: recipient,
-      subject: "Payment Failed",
-      html: emailHTML,
-    });
+    await sendEmailNotification(recipient, "Payment Failed", emailHTML);
   }
 
   // Create notification record for the merchant
@@ -344,11 +336,7 @@ const handleTransferSuccess = async (event) => {
         const emailHTML = notificationEmail(recipient, body);
 
         // Notify the merchant via email with the HTML content
-        await sendEmailNotification({
-          email: recipient,
-          subject: "Withdrawal Successful",
-          html: emailHTML,
-        });
+        await sendEmailNotification(recipient, "Withdrawal Successful", emailHTML);
 
         // Create a notification record in the notificationModel
         await notificationModel.create({
@@ -420,11 +408,7 @@ const handleTransferSuccess = async (event) => {
           const emailHTML = notificationEmail(recipient, body);
 
           // Notify the merchant via email with the HTML content
-          await sendEmailNotification({
-            email: recipient,
-            subject: "Transfer Successful",
-            html: emailHTML,
-          });
+          await sendEmailNotification(recipient, "Transfer Successful", emailHTML);
 
           // Create a notification record in the notificationModel
           await notificationModel.create({
@@ -500,11 +484,7 @@ const handleTransferFailed = async (event) => {
         const emailHTML = notificationEmail(recipient, body);
 
         // Notify the merchant via email with the HTML content
-        await sendEmailNotification({
-          email: recipient,
-          subject: "Withdrawal Failed",
-          html: emailHTML,
-        });
+        await sendEmailNotification(recipient, "Withdrawal Failed", emailHTML);
 
         // Create a notification record in the notificationModel
         await notificationModel.create({
@@ -566,11 +546,7 @@ const handleTransferFailed = async (event) => {
           const emailHTML = notificationEmail(recipient, body);
 
           // Notify the merchant via email with the HTML content
-          await sendEmailNotification({
-            email: recipient,
-            subject: "Transfer Failed",
-            html: emailHTML,
-          });
+          await sendEmailNotification(recipient, "Transfer Failed", emailHTML);
 
           // Create a notification record in the notificationModel
           await notificationModel.create({
