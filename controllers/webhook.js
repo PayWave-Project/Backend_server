@@ -155,39 +155,38 @@ const handleChargeSuccess = async (event) => {
     // Save the updated merchant and payment records concurrently
     await Promise.all([merchant.save(), paymentRecord.save()]);
 
-    const emailBody = `Customer payment of ${paymentRecord.amount} ${paymentRecord.currency} was successful. Reference: ${paymentRecord.reference}. \n\n PayWave Team`;
-    const recipients = [merchant.email, paymentRecord.email];
+const emailBody = `Customer payment of ${paymentRecord.amount} ${paymentRecord.currency} was successful. Reference: ${paymentRecord.reference}. \n\n PayWave Team`;
+const recipients = [merchant.email, paymentRecord.email];
 
-    // Function to send notifications
-    const sendNotifications = async (recipients, body) => {
-      const notificationPromises = recipients.map(async (recipient) => {
-        // Generate dynamic email HTML for each recipient
-        const emailHTML = notificationEmail(recipient, body);
+// Function to send notifications
+const sendNotifications = async (recipients, body) => {
+  const emailPromises = recipients.map((recipient) => {
+    const emailHTML = notificationEmail(recipient, body);
 
-        // Send notification email and create notification record concurrently
-        return Promise.all([
-          sendEmailNotification({
-            email: recipient,
-            subject: "Payment Successful",
-            html: emailHTML,
-          }),
-          notificationModel.create({
-            merchant: merchant._id,
-            email: recipient,
-            subject: "Payment Successful",
-            message: body,
-            date: new Date().toLocaleDateString(),
-            time: new Date().toLocaleTimeString(),
-          }),
-        ]);
-      });
+    return sendEmailNotification({
+      email: recipient,
+      subject: "Payment Successful",
+      html: emailHTML,
+    });
+  });
 
-      // Wait for all notifications to be sent
-      await Promise.all(notificationPromises);
-    };
+  // Wait for all emails to be sent
+  await Promise.all(emailPromises);
 
-    // Call the function to send notifications
-    await sendNotifications(recipients, emailBody);
+  // Create notification record only for the merchant
+  await notificationModel.create({
+    merchant: merchant._id,
+    email: paymentRecord.email,
+    subject: "Payment Successful",
+    message: body,
+    date: new Date().toLocaleDateString(),
+    time: new Date().toLocaleTimeString(),
+  });
+};
+
+// Call the function to send notifications
+await sendNotifications(recipients, emailBody);
+
 
     console.log(
       "Payment verification and merchant notification completed successfully!"
