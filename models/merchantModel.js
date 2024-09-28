@@ -110,6 +110,9 @@ const merchantSchema = new Schema({
         type: Number,
         default: 0
     },
+    authPIN: {
+        type: String,
+    },
 
 }, { timestamps: true });
 

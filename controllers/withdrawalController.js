@@ -3,6 +3,7 @@ const merchantModel = require("../models/merchantModel");
 const bankCodeModel = require("../models/banksCodeModel");
 const crypto = require("crypto");
 const axios = require("axios");
+const { verifyHash } = require("../utils/hashUtilis");
 require("dotenv").config();
 
 const KORAPAY_API_BASE_URL = process.env.KORAPAY_API_BASE_URL;
@@ -94,7 +95,7 @@ const verifyBankAccount = async (bankCode, accountNumber) => {
 exports.withdrawFunds = async (req, res) => {
   try {
     const { userId } = req.user;
-    const { amount, beneficiaryBankCode, beneficiaryAccountNumber, email } = req.body;
+    const { amount, beneficiaryBankCode, beneficiaryAccountNumber, email, authPIN } = req.body;
 
     if (!amount || !email || !beneficiaryBankCode ||!beneficiaryAccountNumber) {
       return res.status(400).json({ message: "Enter amount, email address, account number and bank code!"});
@@ -163,6 +164,19 @@ exports.withdrawFunds = async (req, res) => {
       KORAPAY_ENCRYPTION_KEY,
       JSON.stringify(requestBody)
     );
+
+    if (!authPIN) {
+      return res.status(404).json({
+        message: "Please enter your authentication PIN for transfer!"
+      })
+    }
+
+    const comparePIN = await verifyHash(authPIN, merchant.authPIN);
+    if (!comparePIN) {
+      return res.status(400).json({
+        message: "Invalid authentication PIN!"
+      })
+    };
 
     // Call the KoraPay payout API
     const response = await axios.post(
