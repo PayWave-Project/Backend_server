@@ -26,30 +26,30 @@ const cloudinary = require("../middleware/cloudinary");
 const path = require("path");
 const fs = require("fs");
 
-const KORAPAY_API_URL = process.env.KORAPAY_API_URL;
+const KORAPAY_API_BASE_URL = process.env.KORAPAY_API_BASE_URL;
 const KORAPAY_SECRET_KEY = process.env.KORAPAY_SECRET_KEY;
 
 const generateOTP = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
-async function createVirtualAccount(merchantDetail, merchantID) {
+async function createVirtualAccount(merchantDetail, merchantID,) {
   try {
 
     const response = await axios.post(
-      `${KORAPAY_API_URL}/virtual-bank-account`,
+      `${KORAPAY_API_BASE_URL}/merchant/api/v1/virtual-bank-account`,
       {
         account_name: merchantDetail.businessName,
         account_reference: merchantID,
         permanent: true,
-        bank_code: "000",
+        bank_code: '000',
         customer: {
-          name: merchantDetail.businessName,
-          email: merchantDetail.email,
+            name: merchantDetail.businessName,
+            email: merchantDetail.email,
         },
         kyc: {
-          bvn: merchantDetail.BVN,
-        },
+            bvn: merchantDetail.bvn,
+        }
       },
       {
         headers: {
@@ -61,6 +61,7 @@ async function createVirtualAccount(merchantDetail, merchantID) {
     return response.data.data;
   } catch (error) {
     console.error("Error creating virtual account:", error);
+    console.error("API_Error: ", error.response.data);
     throw new Error("Failed to create virtual account");
   }
 }
@@ -880,10 +881,10 @@ exports.merchantKYC = async (req, res) => {
     const merchantDetails = {
       email: merchant.email,
       businessName: merchant.businessName,
-      BVN: merchant.BVN,
+      bvn: BVN
     }
 
-    const virtualAcct = await createVirtualAccount(merchantDetails, merchant.merchantId);
+    const virtualAcct = await createVirtualAccount(merchantDetails, merchant.merchantId)
     if (!virtualAcct) {
       return res.status(400).json({ message: "Failed to create merchant virtual account!" })
     }

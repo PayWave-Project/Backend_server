@@ -16,6 +16,7 @@ const verifyBVNWithKoraPay = async (BVN) => {
           },
         }
       );
+      // console.log(response.data)
       return {
         isValid: response.data.status === "true",
         data: response.data.data,
@@ -45,7 +46,7 @@ async function verifyCACWithKoraPay(CAC) {
     );
       // Check if the response indicates a valid CAC
       const isValid = response.data.status === "success" && response.data.data.valid === true;
-      
+      // console.log(response.data)
       return {
         isValid,
         data: response.data.data
