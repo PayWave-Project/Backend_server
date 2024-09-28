@@ -551,7 +551,7 @@ exports.getMerchantAccountDetails = async (req, res) => {
 
     return res.status(200).json({ 
       message: "Account details retrieved successfully!", 
-      balance: accountDetails 
+      data: accountDetails 
     });
 
   } catch (error) {
