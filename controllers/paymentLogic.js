@@ -522,3 +522,32 @@ const saveTransaction = async (transactionData) => {
     throw new Error("Failed to save transaction");
   }
 };
+
+
+
+exports.verifyCustomersBankAccount = async (req, res) => {
+  try {
+    const {beneficiaryBankCode, beneficiaryAccountNumber} = req.body;
+
+        // Verify the bank account
+        const verifiedAccount = await verifyBankAccount(
+          beneficiaryBankCode,
+          beneficiaryAccountNumber
+        );
+        
+        if (!verifiedAccount) {
+          return res.status(400).json({ message: "Invalid bank account details" });
+        }
+
+        return res.status(200).json({
+          message: "Account number successfully verified!",
+          data: verifiedAccount
+        })
+
+  } catch (error) {
+    return res.status(500).json({
+      message: "Error sending money: " + error.message,
+      API_Error: error.response?.data || "No additional error details from API",
+    });
+  }
+};

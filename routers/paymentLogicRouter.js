@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { cardPay, cardAuthorize, cardResendOTPPay, bankTransferPay, sendMoney, } = require('../controllers/paymentLogic');
+const { cardPay, cardAuthorize, cardResendOTPPay, bankTransferPay, sendMoney, verifyCustomersBankAccount, } = require('../controllers/paymentLogic');
 const { authenticate, Admin, } = require('../middleware/authentication');
 
 
@@ -18,5 +18,8 @@ router.post('/pay/bank-transfer', authenticate, bankTransferPay);
 
 //Endpoint to send money to bank account
 router.post('/send-money', authenticate, sendMoney);
+
+//Endpoint to verify customers bank account
+router.post('/verify-bank', authenticate, verifyCustomersBankAccount);
 
 module.exports = router;
