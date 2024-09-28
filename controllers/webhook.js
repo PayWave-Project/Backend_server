@@ -160,8 +160,14 @@ const handleChargeSuccess = async (event) => {
     const emailBody = `Customer payment of ${paymentRecord.amount} ${paymentRecord.currency} was successful. Reference: ${paymentRecord.reference}. \n\n PayWave Team`;
 const recipients = [merchant.email, paymentRecord.email];
 
+    // Ensure emails are defined and are strings
+    if (!recipients.every(email => typeof email === 'string' && email)) {
+      console.error('One or more recipient emails are invalid:', recipients);
+    }
+
 try {
   for (const recipient of recipients) {
+    console.log(`Sending email to: ${recipient}`);
     const emailHTML = notificationEmail(recipient, emailBody);
 
     await sendEmailNotification({
