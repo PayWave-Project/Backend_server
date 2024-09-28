@@ -924,6 +924,11 @@ exports.createAuthPIN = async (req, res) => {
     const { authPIN } = req.body;
     if (!authPIN) return res.status(400).json({ message: "Please enter your authentication PIN for transfer." });
 
+    // Ensure authPIN is a string that contains exactly 4 digits
+    if (!/^\d{4}$/.test(authPIN)) {
+      return res.status(400).json({ message: "Authentication PIN must be a 4-digit number." });
+    }
+
     const hashedPIN = await hashPIN(authPIN);
 
     merchant.authPIN = hashedPIN;
