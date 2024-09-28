@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { generateQRCode, confirmPayment, scanDynamicQRCode, scanStaticCustomQRCode, scanStaticDefinedQRCode, getMerchantTransactionHistory, getMerchantNotification, getMerchantAccountBalance, } = require('../controllers/paymentControllers');
+const { generateQRCode, confirmPayment, scanDynamicQRCode, scanStaticCustomQRCode, scanStaticDefinedQRCode, getMerchantTransactionHistory, getMerchantNotification, getMerchantAccountBalance, getMerchantAccountDetails, } = require('../controllers/paymentControllers');
 const { authenticate, Admin, } = require('../middleware/authentication');
 
 
@@ -27,6 +27,9 @@ router.get("/notifications", authenticate, getMerchantNotification);
 
 // Endpoint to get Merchant Account balance
 router.get("/account-balance", authenticate, getMerchantAccountBalance);
+
+//Endpoint to get Merchant Account details
+router.get("/account-details", authenticate, getMerchantAccountDetails);
 
 
 module.exports = router;
