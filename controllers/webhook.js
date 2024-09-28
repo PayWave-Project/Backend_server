@@ -5,11 +5,12 @@ const withdrawModel = require("../models/withdrawModel");
 const transactionModel = require("../models/transactionModel");
 const notificationModel = require("../models/notificationModel");
 const sendEmailNotification = require("../utils/emailNotification");
+const { notificationEmail } = require("../utils/notificationEmailTemplate");
 const axios = require("axios");
 require("dotenv").config();
 
-const KORAPAY_API_BASE_URL = process.env.KORAPAY_API_BASE_URL;
 const KORAPAY_SECRET_KEY = process.env.KORAPAY_SECRET_KEY;
+const platformCommissionRate = 0.15;
 
 // Webhook Endpoint
 exports.webhook = async (req, res) => {
@@ -21,7 +22,7 @@ exports.webhook = async (req, res) => {
       return res.status(400).send({ error: "Missing signature" });
     }
 
-    // Hash the `data` object from the request payload using your Korapay secret key
+    // Hash the `data` object from the request payload with the Korapay secret key
     const hash = crypto
       .createHmac("sha256", KORAPAY_SECRET_KEY)
       .update(JSON.stringify(req.body.data))
@@ -51,9 +52,9 @@ exports.webhook = async (req, res) => {
     });
 
     if (
-      (existingEvent && existingEvent.status === event.data.status) ||
-      (existingEventW && existingEventW.status === event.data.status) ||
-      (existingEventT && existingEventT.status === event.data.status)
+      (existingEvent && event.data.status === "success") ||
+      (existingEventW && event.data.status === "success") ||
+      (existingEventT && event.data.status === "success")
     ) {
       console.log(
         `Event with reference ${event.data.reference} already processed.`
@@ -129,37 +130,9 @@ const handleChargeSuccess = async (event) => {
       return;
     }
 
-    // Prepare the payout payload for the merchant
-    const payoutPayload = {
-      destination: {
-        amount: paymentRecord.amount,
-        currency: "NGN",
-        type: "bank_account",
-        bank_account: {
-          account_number: merchant.bankAccountDetails.accountNumber,
-          bank_code: merchant.bankAccountDetails.bankCode,
-          account_name: merchant.bankAccountDetails.accountName,
-        },
-        narration: `Disbursement of ${paymentRecord.amount} NGN to ${merchant.name}`,
-      },
-      reference: `comm_${paymentRecord.reference}`,
-    };
-
-    // Process the payout to the merchant's account
-    const payoutResult = await processPayout(payoutPayload);
-    if (!payoutResult.success) {
-      console.error(
-        `Payout failed for merchant ${merchant._id}:`,
-        payoutResult.error
-      );
-      paymentRecord.status = "payout_failed"; // Update status if payout failed
-      await paymentRecord.save();
-      return;
-    }
-
-    console.log(
-      `Successfully disbursed ${paymentRecord.amount} to merchant ${merchant._id}`
-    );
+    // //Calculation of the merchant balance after platform commission deduction
+    // const netAmount = paymentRecord.amount * (1 - platformCommissionRate);
+    // merchant.balance += netAmount;
 
     // Add the payment amount to the merchant's balance
     merchant.balance += paymentRecord.amount;
@@ -169,7 +142,7 @@ const handleChargeSuccess = async (event) => {
       reference: paymentRecord.reference,
       amount: paymentRecord.amount,
       status: paymentRecord.status,
-      type: paymentRecord.type || "charge", // Set type as 'charge' by default
+      type: paymentRecord.type || "charge",
       date: new Date().toLocaleDateString(),
       time: new Date().toLocaleTimeString(),
     });
@@ -185,22 +158,39 @@ const handleChargeSuccess = async (event) => {
     // Save the updated merchant and payment records concurrently
     await Promise.all([merchant.save(), paymentRecord.save()]);
 
-    // Send notification email and create notification record concurrently
-    await Promise.all([
-      sendEmailNotification(
-        merchant.email,
-        "Payment Successful",
-        `Customer payment of ${paymentRecord.amount} ${paymentRecord.currency} was successful. Reference: ${paymentRecord.reference}. \n\n PayWave Team`
-      ),
-      notificationModel.create({
-        merchant: merchant._id,
-        email: merchant.email,
-        subject: "Payment Successful",
-        message: `Payment of ${paymentRecord.amount} ${paymentRecord.currency} was successful. Reference: ${paymentRecord.reference}. \n\n PayWave Team`,
-        date: new Date().toLocaleDateString(),
-        time: new Date().toLocaleTimeString(),
-      }),
-    ]);
+    const emailBody = `Customer payment of ${paymentRecord.amount} ${paymentRecord.currency} was successful. Reference: ${paymentRecord.reference}. \n\n PayWave Team`;
+    const recipients = [merchant.email, paymentRecord.email];
+
+    // Function to send notifications
+    const sendNotifications = async (recipients, body) => {
+      const notificationPromises = recipients.map(async (recipient) => {
+        // Generate dynamic email HTML for each recipient
+        const emailHTML = notificationEmail(recipient, body);
+
+        // Send notification email and create notification record concurrently
+        return Promise.all([
+          sendEmailNotification({
+            email: recipient,
+            subject: "Payment Successful",
+            html: emailHTML,
+          }),
+          notificationModel.create({
+            merchant: merchant._id,
+            email: recipient,
+            subject: "Payment Successful",
+            message: body,
+            date: new Date().toLocaleDateString(),
+            time: new Date().toLocaleTimeString(),
+          }),
+        ]);
+      });
+
+      // Wait for all notifications to be sent
+      await Promise.all(notificationPromises);
+    };
+
+    // Call the function to send notifications
+    await sendNotifications(recipients, emailBody);
 
     console.log(
       "Payment verification and merchant notification completed successfully!"
@@ -252,7 +242,7 @@ const handleChargeFailed = async (event) => {
       reference: paymentRecord.reference,
       amount: paymentRecord.amount,
       status: paymentRecord.status,
-      type: paymentRecord.type || "charge", // Set type as 'charge' by default
+      type: paymentRecord.type || "charge",
       date: new Date().toLocaleDateString(),
       time: new Date().toLocaleTimeString(),
     });
@@ -266,21 +256,39 @@ const handleChargeFailed = async (event) => {
     merchant.notification.push(notifyMsg);
     await merchant.save();
 
-    // Notify merchant via email about the failed payment
-    await sendEmailNotification(
-      merchant.email,
-      "Payment Failed",
-      `Customer payment of ${paymentRecord.amount} ${paymentRecord.currency} has failed. Reference: ${paymentRecord.reference}. \n\n PayWave Team`
-    );
+    const failedEmailBody = `Customer payment of ${paymentRecord.amount} ${paymentRecord.currency} has failed. Reference: ${paymentRecord.reference}. \n\n PayWave Team`;
+    const Recipients = [merchant.email, paymentRecord.email];
 
-    notificationModel.create({
-      merchant: merchant._id,
-      email: merchant.email,
-      subject: "Payment failed",
-      message: `Payment of ${paymentRecord.amount} ${paymentRecord.currency} has failed. Reference: ${paymentRecord.reference}. \n\n PayWave Team`,
-      date: new Date().toLocaleDateString(),
-      time: new Date().toLocaleTimeString(),
-    });
+    // Function to send notifications for failed payment
+    const sendFailedPaymentNotifications = async (recipients, body) => {
+      const notificationPromises = recipients.map(async (recipient) => {
+        // Generate dynamic email HTML for each recipient
+        const emailHTML = notificationEmail(recipient, body);
+
+        // Send notification email and create notification record concurrently
+        return Promise.all([
+          sendEmailNotification({
+            email: recipient,
+            subject: "Payment Failed",
+            html: emailHTML,
+          }),
+          notificationModel.create({
+            merchant: merchant._id,
+            email: recipient,
+            subject: "Payment Failed",
+            message: body,
+            date: new Date().toLocaleDateString(),
+            time: new Date().toLocaleTimeString(),
+          }),
+        ]);
+      });
+
+      // Wait for all notifications to be sent
+      await Promise.all(notificationPromises);
+    };
+
+    // Call the function to send failed payment notifications
+    await sendFailedPaymentNotifications(Recipients, failedEmailBody);
 
     console.log("Payment failure handled successfully!");
   } catch (err) {
@@ -306,7 +314,15 @@ const handleTransferSuccess = async (event) => {
       // Fetch the merchant and deduct the amount from their balance
       const merchant = await merchantModel.findById(withdrawal.merchant);
       if (merchant) {
-        merchant.balance -= withdrawal.amount;
+        // //Calculation of the merchant balance after platform commission deduction
+        // const netAmount = paymentRecord.amount * (1 - platformCommissionRate);
+        // merchant.balance -= netAmount;
+
+        if (merchant.balance >= withdrawal.amount) {
+          merchant.balance -= withdrawal.amount;
+        } else {
+          console.log("Insufficient balance");
+        }
 
         // Push the transaction into the merchant's transactionHistory
         merchant.transactionHistory.push({
@@ -327,19 +343,26 @@ const handleTransferSuccess = async (event) => {
 
         await merchant.save();
 
-        // Notify merchant via email about the successful withdrawal
-        await sendEmailNotification(
-          merchant.email,
-          "Withdrawal Successful",
-          `Your withdrawal of ${withdrawal.amount} ${withdrawal.currency} was successful. Transfer reference: ${withdrawal.reference}.`
-        );
+        // Define the recipient and email body content for the successful payment transfer
+        const recipient = merchant.email;
+        const body = `Your withdrawal of ${withdrawal.amount} ${withdrawal.currency} was successful. wWthdrawal reference: ${withdrawal.reference}. \n\n PayWave Team`;
+
+        // Generate the HTML content for the email
+        const emailHTML = notificationEmail(recipient, body);
+
+        // Notify the merchant via email with the HTML content
+        await sendEmailNotification({
+          email: recipient,
+          subject: "Withdrawal Successful",
+          html: emailHTML,
+        });
 
         // Create a notification record in the notificationModel
         await notificationModel.create({
           merchant: merchant._id,
-          email: merchant.email,
+          email: recipient,
           subject: "Withdrawal Successful",
-          message: `Your withdrawal of ${withdrawal.amount} ${withdrawal.currency} was successful. Reference: ${withdrawal.reference}.`,
+          message: body,
           date: new Date().toLocaleDateString(),
           time: new Date().toLocaleTimeString(),
         });
@@ -356,7 +379,7 @@ const handleTransferSuccess = async (event) => {
       }
     } else {
       // If it's not a withdrawal, handle other transfer successes (e.g., transfer related to payments)
-      const paymentRecord = await paymentModel.findOne({
+      const paymentRecord = await transactionModel.findOne({
         reference: transferData.reference,
       });
 
@@ -367,12 +390,22 @@ const handleTransferSuccess = async (event) => {
 
         const merchant = await merchantModel.findById(paymentRecord.merchant);
         if (merchant) {
+          // //Calculation of the merchant balance after platform commission deduction
+          // const netAmount = paymentRecord.amount * (1 - platformCommissionRate);
+          // merchant.balance -= netAmount;
+
+          if (merchant.balance >= paymentRecord.amount) {
+            merchant.balance -= paymentRecord.amount;
+          } else {
+            console.log("Insufficient balance");
+          }
+
           // Push the transaction into the merchant's transactionHistory
           merchant.transactionHistory.push({
             reference: paymentRecord.reference,
             amount: paymentRecord.amount,
             status: "success",
-            type: "payment",
+            type: "transfer",
             date: new Date().toLocaleDateString(),
             time: new Date().toLocaleTimeString(),
           });
@@ -386,19 +419,26 @@ const handleTransferSuccess = async (event) => {
 
           await merchant.save();
 
-          // Notify merchant via email
-          await sendEmailNotification(
-            merchant.email,
-            "Payment Transfer Successful",
-            `Your transfer of ${paymentRecord.amount} ${paymentRecord.currency} was successful. Transfer reference: ${paymentRecord.reference}. \n\n PayWave Team`
-          );
+          // Define the recipient and email body content for the successful payment transfer
+          const recipient = merchant.email;
+          const body = `Your transfer of ${paymentRecord.amount} ${paymentRecord.currency} was successful. Transfer reference: ${paymentRecord.reference}. \n\n PayWave Team`;
+
+          // Generate the HTML content for the email
+          const emailHTML = notificationEmail(recipient, body);
+
+          // Notify the merchant via email with the HTML content
+          await sendEmailNotification({
+            email: recipient,
+            subject: "Transfer Successful",
+            html: emailHTML,
+          });
 
           // Create a notification record in the notificationModel
           await notificationModel.create({
             merchant: merchant._id,
-            email: merchant.email,
-            subject: "Payment Successful",
-            message: `Payment of ${paymentRecord.amount} ${paymentRecord.currency} was successful. Reference: ${paymentRecord.reference}. \n\n PayWave Team`,
+            email: recipient,
+            subject: "Transfer Successful",
+            message: body,
             date: new Date().toLocaleDateString(),
             time: new Date().toLocaleTimeString(),
           });
@@ -421,7 +461,6 @@ const handleTransferSuccess = async (event) => {
     console.error("Transfer Success Handling Error:", err.message);
   }
 };
-
 
 const handleTransferFailed = async (event) => {
   const transferData = event.data;
@@ -460,19 +499,26 @@ const handleTransferFailed = async (event) => {
 
         await merchant.save();
 
-        // Notify merchant via email about the failed withdrawal
-        await sendEmailNotification(
-          merchant.email,
-          "Withdrawal Failed",
-          `Your withdrawal of ${withdrawal.amount} ${withdrawal.currency} has failed. Reference: ${withdrawal.reference}.`
-        );
+        // Define the recipient and email body content for the successful payment transfer
+        const recipient = merchant.email;
+        const body = `Your withdrawal of ${withdrawal.amount} ${withdrawal.currency} has failed. wWthdrawal reference: ${withdrawal.reference}. \n\n PayWave Team`;
+
+        // Generate the HTML content for the email
+        const emailHTML = notificationEmail(recipient, body);
+
+        // Notify the merchant via email with the HTML content
+        await sendEmailNotification({
+          email: recipient,
+          subject: "Withdrawal Failed",
+          html: emailHTML,
+        });
 
         // Create a notification record in the notificationModel
         await notificationModel.create({
           merchant: merchant._id,
-          email: merchant.email,
+          email: recipient,
           subject: "Withdrawal Failed",
-          message: `Your withdrawal of ${withdrawal.amount} ${withdrawal.currency} has failed. Reference: ${withdrawal.reference}.`,
+          message: body,
           date: new Date().toLocaleDateString(),
           time: new Date().toLocaleTimeString(),
         });
@@ -489,7 +535,7 @@ const handleTransferFailed = async (event) => {
       }
     } else {
       // If it's not a withdrawal, handle other transfer failures (e.g., payment related)
-      const paymentRecord = await paymentModel.findOne({
+      const paymentRecord = await transactionModel.findOne({
         reference: transferData.reference,
       });
 
@@ -502,7 +548,7 @@ const handleTransferFailed = async (event) => {
         if (merchant) {
           // Push the notification message into the merchant's notification array
           merchant.notification.push({
-            notificationMessage: `Payment of ${paymentRecord.amount} ${paymentRecord.currency} has failed. Reference: ${paymentRecord.reference}. \n\n PayWave Team`,
+            notificationMessage: `Your transfer of ${paymentRecord.amount} ${paymentRecord.currency} has failed. Reference: ${paymentRecord.reference}. \n\n PayWave Team`,
             date: new Date().toLocaleDateString(),
             time: new Date().toLocaleTimeString(),
           });
@@ -519,19 +565,26 @@ const handleTransferFailed = async (event) => {
 
           await merchant.save();
 
-          // Notify merchant via email
-          await sendEmailNotification(
-            merchant.email,
-            "Payment Transfer Failed",
-            `Payment of ${paymentRecord.amount} ${paymentRecord.currency} has failed. Reference: ${paymentRecord.reference}. \n\n PayWave Team`
-          );
+          // Define the recipient and email body content for the successful payment transfer
+          const recipient = merchant.email;
+          const body = `Your transfer of ${paymentRecord.amount} ${paymentRecord.currency} has failed. Transfer reference: ${paymentRecord.reference}. \n\n PayWave Team`;
+
+          // Generate the HTML content for the email
+          const emailHTML = notificationEmail(recipient, body);
+
+          // Notify the merchant via email with the HTML content
+          await sendEmailNotification({
+            email: recipient,
+            subject: "Transfer Failed",
+            html: emailHTML,
+          });
 
           // Create a notification record in the notificationModel
           await notificationModel.create({
             merchant: merchant._id,
-            email: merchant.email,
-            subject: "Payment Failed",
-            message: `Payment of ${paymentRecord.amount} ${paymentRecord.currency} has failed. Reference: ${paymentRecord.reference}. \n\n PayWave Team`,
+            email: recipient,
+            subject: "Transfer Failed",
+            message: body,
             date: new Date().toLocaleDateString(),
             time: new Date().toLocaleTimeString(),
           });
@@ -552,24 +605,5 @@ const handleTransferFailed = async (event) => {
     }
   } catch (err) {
     console.error("Transfer Failure Handling Error:", err.message);
-  }
-};
-
-// Helper function to handle payout
-const processPayout = async (payoutPayload) => {
-  try {
-    const korapayResponse = await axios.post(
-      `${KORAPAY_API_BASE_URL}/merchant/api/v1/transactions/disburse`,
-      payoutPayload,
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.KORAPAY_SECRET_KEY}`,
-        },
-      }
-    );
-    return korapayResponse.data;
-  } catch (error) {
-    console.error("Payout API Error:", error.response?.data || error.message);
-    return { success: false, message: "Failed to disburse payment." };
   }
 };
