@@ -41,19 +41,22 @@ exports.webhook = async (req, res) => {
     const event = req.body;
 
     // Prevent duplicate event processing (check by transaction reference)
-      if (event.event === "charge.success") {
-      const existingEvent = await paymentModel.findOne({ reference: event.data.reference });
-      const existingEventT = await transactionModel.findOne({ reference: event.data.reference });
-      if (existingEvent || existingEventT) {
-        console.log(`Payment event with reference ${event.data.reference} already processed.`);
-        return res.status(200).json({ message: "Event already processed" });
-      }
-    } else if (event.event === "transfer.success") {
-      const existingEventW = await withdrawModel.findOne({ reference: event.data.reference });
-      if (existingEventW) {
-        console.log(`Transfer event with reference ${event.data.reference} already processed.`);
-        return res.status(200).json({ message: "Event already processed" });
-      }
+    const existingEvent = await paymentModel.findOne({
+      reference: event.data.reference,
+      status: "success"
+    });
+    const existingEventW = await withdrawModel.findOne({
+      reference: event.data.reference,
+      status: "success"
+    });
+    const existingEventT = await transactionModel.findOne({
+      reference: event.data.reference,
+      status: "success"
+    });
+
+    if ((existingEvent) || (existingEventW) || (existingEventT)) {
+      console.log(`Event with reference ${event.data.reference} already processed.`);
+      return res.status(200).json({ message: "Event already processed" });
     }
 
     // Event handling switch
