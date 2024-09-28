@@ -158,36 +158,32 @@ const handleChargeSuccess = async (event) => {
     await Promise.all([merchant.save(), paymentRecord.save()]);
 
     const emailBody = `Customer payment of ${paymentRecord.amount} ${paymentRecord.currency} was successful. Reference: ${paymentRecord.reference}. \n\n PayWave Team`;
-    const recipients = [merchant.email, paymentRecord.email];
+const recipients = [merchant.email, paymentRecord.email];
 
-    // Function to send notifications
-    const sendNotifications = async (recipients, body) => {
-      const emailPromises = recipients.map((recipient) => {
-        const emailHTML = notificationEmail(recipient, body);
+try {
+  for (const recipient of recipients) {
+    const emailHTML = notificationEmail(recipient, emailBody);
 
-        return sendEmailNotification({
-          email: recipient,
-          subject: "Payment Successful",
-          html: emailHTML,
-        });
-      });
+    await sendEmailNotification({
+      email: recipient,
+      subject: "Payment Successful",
+      html: emailHTML,
+    });
+  }
 
-      // Wait for all emails to be sent
-      await Promise.all(emailPromises);
+  // Create notification record for the merchant
+  await notificationModel.create({
+    merchant: merchant._id,
+    email: paymentRecord.email,
+    subject: "Payment Successful",
+    message: emailBody,
+    date: new Date().toLocaleDateString(),
+    time: new Date().toLocaleTimeString(),
+  });
 
-      // Create notification record only for the merchant
-      await notificationModel.create({
-        merchant: merchant._id,
-        email: paymentRecord.email,
-        subject: "Payment Successful",
-        message: body,
-        date: new Date().toLocaleDateString(),
-        time: new Date().toLocaleTimeString(),
-      });
-    };
-
-    // Call the function to send notifications
-    await sendNotifications(recipients, emailBody);
+} catch (error) {
+  console.error(`Failed to send email to ${recipients.join(', ')}:`, error.message);
+}
 
     console.log(
       "Payment verification and merchant notification completed successfully!"
@@ -254,36 +250,32 @@ const handleChargeFailed = async (event) => {
     await merchant.save();
 
     const failedEmailBody = `Customer payment of ${paymentRecord.amount} ${paymentRecord.currency} has failed. Reference: ${paymentRecord.reference}. \n\n PayWave Team`;
-    const recipients = [merchant.email, paymentRecord.email];
+const recipients = [merchant.email, paymentRecord.email];
 
-    // Function to send notifications for failed payment
-    const sendFailedPaymentNotifications = async (recipients, body) => {
-      const emailPromises = recipients.map((recipient) => {
-        const emailHTML = notificationEmail(recipient, body);
+try {
+  for (const recipient of recipients) {
+    const emailHTML = notificationEmail(recipient, failedEmailBody);
 
-        return sendEmailNotification({
-          email: recipient,
-          subject: "Payment Failed",
-          html: emailHTML,
-        });
-      });
+    await sendEmailNotification({
+      email: recipient,
+      subject: "Payment Failed",
+      html: emailHTML,
+    });
+  }
 
-      // Wait for all emails to be sent
-      await Promise.all(emailPromises);
+  // Create notification record for the merchant
+  await notificationModel.create({
+    merchant: merchant._id,
+    email: paymentRecord.email, 
+    subject: "Payment Failed",
+    message: failedEmailBody,
+    date: new Date().toLocaleDateString(),
+    time: new Date().toLocaleTimeString(),
+  });
 
-      // Create notification record only for the merchant
-      await notificationModel.create({
-        merchant: merchant._id,
-        email: paymentRecord.email,
-        subject: "Payment Failed",
-        message: body,
-        date: new Date().toLocaleDateString(),
-        time: new Date().toLocaleTimeString(),
-      });
-    };
-
-    // Call the function to send failed payment notifications
-    await sendFailedPaymentNotifications(recipients, failedEmailBody);
+} catch (error) {
+  console.error(`Failed to send email to ${recipients.join(', ')}:`, error.message);
+}
 
     console.log("Payment failure handled successfully!");
   } catch (err) {
