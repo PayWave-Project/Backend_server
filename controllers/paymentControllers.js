@@ -16,6 +16,10 @@ if (!KORAPAY_SECRET_KEY || !KORAPAY_API_URL) {
   );
 }
 
+const toTitleCase = (str) => {
+  return str.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+}
+
 exports.generateQRCode = async (req, res) => {
   try {
     const { userId } = req.user;
@@ -99,17 +103,17 @@ exports.generateQRCode = async (req, res) => {
     newPayment.checkout_url = checkout_url;
 
     // Generate the QR code
-    const scanUrl = `http://localhost:3000/scan-qr?type=${newPayment.type}&reference=${newPayment.reference}`;
+    const scanUrl = `${req.protocol}://${req.get("host")}/scan?type=${newPayment.type}&reference=${newPayment.reference}`;
     const merchantDetails = {
       merchantId: newPayment.merchantId,
-      merchantName: `${merchant.firstName} ${merchant.lastName}`,
-      businessName: merchant.businessName,
+      merchantName: toTitleCase(`${merchant.firstName} ${merchant.lastName}`),
+      businessName: toTitleCase(merchant.businessName),
       amount: type === 'static_custom' ? 0 : newPayment.amount,
       currency: newPayment.currency,
-      status: newPayment.status,
+      status: toTitleCase(newPayment.status),
       reference: newPayment.reference,
       expiresAt: newPayment.expiresAt,
-      type: newPayment.type,
+      type: toTitleCase(newPayment.type),
     }
 
     const payData = JSON.stringify(merchantDetails);

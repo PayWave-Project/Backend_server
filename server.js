@@ -1,5 +1,6 @@
 require('./config/dbConfig');
 const express = require('express');
+const path = require('path');
 require('dotenv').config();
 const bodyParser = require('body-parser');
 const cors = require('cors');
@@ -9,6 +10,7 @@ const paymentRouter = require('./routers/paymentRouter');
 const merchantRouter = require('./routers/merchantRouter');
 const paymentService = require('./routers/paymentLogicRouter');
 const withdrawRouter = require('./routers/withdrawRouter');
+
 
 
 const corsOptions = {
@@ -37,6 +39,13 @@ app.use('/api/v1', merchantRouter);
 app.use('/api/v1', paymentService);
 app.use('/api/v1', withdrawRouter);
 
+// Serve static files from the 'view' directory
+app.use(express.static(path.join(__dirname, 'views')));
+
+// Serve the QR code scanning page (Frontend)
+app.get('/scan', (req, res) => {
+    res.sendFile(path.join(__dirname, 'views', 'scanQRCode.html'));
+});
 
 // Add error handling middleware for JSON parsing errors
 app.use((err, req, res, next) => {
