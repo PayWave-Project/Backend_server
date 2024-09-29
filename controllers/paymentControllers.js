@@ -113,7 +113,7 @@ exports.generateQRCode = async (req, res) => {
 
     const payData = JSON.stringify(merchantDetails);
 
-    const qrCodeData = `${scanUrl}?data=${encodeURIComponent(payData)}`;
+    const qrCodeData = `${scanUrl}&data=${encodeURIComponent(payData)}`;
     const qrCodeBuffer = await QRCode.toBuffer(qrCodeData, {
       errorCorrectionLevel: 'H', 
       type: 'png',
