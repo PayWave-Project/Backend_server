@@ -103,7 +103,7 @@ exports.generateQRCode = async (req, res) => {
       merchantId: newPayment.merchantId,
       merchantName: `${merchant.firstName} ${merchant.lastName}`,
       businessName: merchant.businessName,
-      amount: newPayment.amount,
+      amount: type === 'static_custom' ? 0 : newPayment.amount,
       currency: newPayment.currency,
       status: newPayment.status,
       reference: newPayment.reference,
