@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PayWave QR Payment</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #e9f5ff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        header {
+            background-color: #143685;
+            color: white;
+            padding: 15px 20px;
+            width: 100%;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            position: fixed;
+            top: 0;
+            left: 0;
+            display: flex;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            text-decoration: none;
+            color: white;
+            display: flex;
+            align-items: center;
+        }
+
+        .logo img {
+          height: 40px;
+          width: auto;
+        }
+
+        .welcome {
+            font-size: 18px;
+            margin-left: 20px;
+        }
+
+        main {
+            max-width: 400px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: #ffffff;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            padding: 15px 20px;
+            text-align: center;
+            margin-top: 100px;
+            transition: transform 0.2s ease;
+        }
+
+        main:hover {
+            transform: scale(1.02);
+        }
+
+        h1 {
+            font-size: 22px;
+            color: #333;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        #qrCodeImage {
+            width: 100px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        #encodedDataSection {
+            width: 80%;
+            display: none;
+            margin-top: 20px;
+            word-wrap: break-word;
+            font-size: 14px;
+            color: #555;
+            text-align: left;
+        }
+
+        #amountSection,
+        #loading {
+            display: none;
+            margin-top: 20px;
+        }
+
+        input[type="number"] {
+            width: 85%;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            font-size: 16px;
+            margin-bottom: 12px;
+        }
+
+        button {
+            width: 85%;
+            padding: 12px;
+            border-radius: 6px;
+            background-color: #143685;
+            color: white;
+            font-size: 16px;
+            border: none;
+            cursor: pointer;
+            margin-bottom: 12px;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #0d4ad6;
+        }
+
+        button:disabled {
+            background-color: #b0b0b0;
+        }
+
+        #loading {
+            color: #143685;
+            font-weight: bold;
+        }
+
+        #message {
+            color: red;
+            margin-top: 10px;
+        }
+
+        footer {
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+            padding: 10px;
+            margin-top: 20px;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 600px) {
+            main {
+                padding: 20px;
+            }
+            input[type="number"], button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <a class="logo" href="https://app-paywave.vercel.app/"> 
+          <img src="https://res.cloudinary.com/dx6qmw7w9/image/upload/v1727641361/new_paywave_gvlraw.png" alt="PayWave_Logo"> 
+          <!-- &nbsp;PayWave QR -->
+        </a>
+        <span class="welcome">|  &nbsp; &nbsp; Welcome to PayWave QR</span>
+    </header>
+
+    <main id="container">
+        <h1>Scan & Pay with QR Code Seemlessly</h1>
+        <div id="message"></div>
+        <img id="qrCodeImage" src="" alt="QR Code" />
+        <div id="encodedDataSection" class="merchant-details">
+            <!-- Merchant details will be populated here -->
+        </div>
+        <div id="amountSection">
+            <input type="number" id="amount" placeholder="Enter amount" />
+            <button id="submitAmount">Submit Amount</button>
+        </div>
+        <button id="proceedToPay">Proceed to Pay</button>
+        <div id="loading">Processing...</div>
+    </main>
+
+    <footer>&copy; 2024 PayWave QR. All Rights Reserved.</footer>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const queryParams = new URLSearchParams(window.location.search);
+            const reference = queryParams.get("reference");
+            const type = queryParams.get("type");
+            const encodedURIData = queryParams.get("data");
+
+            const qrCodeImage = document.getElementById("qrCodeImage");
+            const amountSection = document.getElementById("amountSection");
+            const loadingElement = document.getElementById("loading");
+            const messageElement = document.getElementById("message");
+            const encodedDataSection = document.getElementById("encodedDataSection");
+            const proceedToPayButton = document.getElementById("proceedToPay");
+
+            if (encodedURIData) {
+                const decodedData = JSON.parse(decodeURIComponent(encodedURIData));
+                encodedDataSection.style.display = "block";
+                encodedDataSection.innerHTML = `
+                    <p><strong>Merchant ID:</strong> ${decodedData.merchantId}</p>
+                    <p><strong>Merchant Name:</strong> ${decodedData.merchantName || 'N/A'}</p>
+                    <p><strong>Business Name:</strong> ${decodedData.businessName}</p>
+                    <p><strong>Amount:</strong> ${decodedData.amount}</p>
+                    <p><strong>Currency:</strong> ${decodedData.currency}</p>
+                    <p><strong>Status:</strong> ${decodedData.status}</p>
+                    <p><strong>Reference:</strong> ${decodedData.reference}</p>
+                    <p><strong>Type:</strong> ${decodedData.type}</p>
+                    <p><strong>Expires At:</strong> ${decodedData.expiresAt || 'N/A'}</p>
+                `;
+            }
+
+            if (type === "static_custom") {
+                amountSection.style.display = "block";
+            } else {
+                fetch(`/api/v1/scan/${type}/${reference}`, { method: "GET" })
+                    .then((response) => response.json())
+                    .then((data) => {
+                        if (data.qrCode) {
+                            qrCodeImage.src = data.qrCode;
+                            qrCodeImage.style.display = "block";
+                            proceedToPayButton.style.display = "block";
+                            proceedToPayButton.addEventListener("click", () => {
+                                window.location.href = data.checkoutUrl;
+                            });
+                        } else {
+                            messageElement.innerText = data.message + (data.error ? `: ${data.error}` : "");
+                        }
+                    })
+                    .catch((error) => {
+                        messageElement.innerText = "An error occurred while fetching the QR code.";
+                        console.error("Fetch error:", error.message);
+                    });
+            }
+
+            document.getElementById("submitAmount").addEventListener("click", () => {
+                const amount = document.getElementById("amount").value;
+                if (amount && !isNaN(amount) && amount > 0) {
+                    loadingElement.style.display = "block";
+                    fetch(`/api/v1/scan/static_custom/${reference}`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ amount }),
+                    })
+                        .then((response) => response.json())
+                        .then((data) => {
+                            if (data.checkoutUrl) {
+                                window.location.href = data.checkoutUrl;
+                            } else {
+                                messageElement.innerText = data.message + ": " + data.error || "Error processing payment";
+                            }
+                            loadingElement.style.display = "none";
+                        });
+                } else {
+                    messageElement.innerText = "Please enter a valid amount.";
+                }
+            });
+        });
+    </script>
+</body>
+</html>
