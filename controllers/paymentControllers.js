@@ -186,7 +186,9 @@ exports.scanDynamicQRCode = async (req, res) => {
 exports.scanStaticCustomQRCode = async (req, res) => {
   try {
     const { reference } = req.params;
-    const { amount } = req.body || {};
+    const { amount, narration } = req.body || {};
+
+    if (!amount) return res.status(400).json({ message: "Please input the amount you want to pay" })
 
     const payment = await paymentModel.findOne({ reference });
 
