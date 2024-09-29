@@ -98,8 +98,23 @@ exports.generateQRCode = async (req, res) => {
     newPayment.checkout_url = checkout_url;
 
     // Generate the QR code
-    const scanUrl = `${req.protocol}://${req.get("host")}/scan?type=${newPayment.type}&reference=${newPayment.reference}`;
-    const qrCodeBuffer = await QRCode.toBuffer(scanUrl, {
+    const scanUrl = `http://localhost:3000/scan-qr?type=${newPayment.type}&reference=${newPayment.reference}`;
+    const merchantDetails = {
+      merchantId: newPayment.merchantId,
+      merchantName: `${merchant.firstName} ${merchant.lastName}`,
+      businessName: merchant.businessName,
+      amount: newPayment.amount,
+      currency: newPayment.currency,
+      status: newPayment.status,
+      reference: newPayment.reference,
+      expiresAt: newPayment.expiresAt,
+      type: newPayment.type,
+    }
+
+    const payData = JSON.stringify(merchantDetails);
+
+    const qrCodeData = `${scanUrl}?data=${encodeURIComponent(payData)}`;
+    const qrCodeBuffer = await QRCode.toBuffer(qrCodeData, {
       errorCorrectionLevel: 'H', 
       type: 'png',
       width: 500,
