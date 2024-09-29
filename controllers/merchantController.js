@@ -173,13 +173,19 @@ exports.registerMerchant = async (req, res) => {
 //Function to verify a new merchant via a otp
 exports.verify = async (req, res) => {
   try {
-    const id = req.params.id;
+    const { email, otp } = req.body;
 
-    const { otp } = req.body;
+    if ( !email || !otp) {
+      return res.status(400).json({
+        message: "Email and OTP are required!",
+      });
+    }
 
-    const merchant = await merchantModel.findById(id);
+    const merchant = await merchantModel.findOne({ email: email.toLowerCase()});
     if (!merchant) {
-      return res.status(404).json({ message: "Merchant not found" });
+      return res.status(404).json({
+        message: "Merchant not found",
+      });
     }
 
     console.log(`Stored OTP: ${merchant.otp}, type: ${typeof merchant.otp}`);
@@ -295,7 +301,7 @@ exports.verify = async (req, res) => {
 
     // OTP is valid, verify the merchant and reset OTP-related fields
     const updatedMerchant = await merchantModel.findByIdAndUpdate(
-      id,
+      merchant._id,
       {
         isVerified: true,
         otp: null,
@@ -326,11 +332,19 @@ exports.verify = async (req, res) => {
 
 exports.resendOTP = async (req, res) => {
   try {
-    const id = req.params.id;
+    const { email } = req.body;
 
-    const merchant = await merchantModel.findById(id);
+    if ( !email ) {
+      return res.status(400).json({
+        message: "Email and OTP are required!",
+      });
+    }
+
+    const merchant = await merchantModel.findOne({ email: email.toLowerCase()});
     if (!merchant) {
-      return res.status(404).json({ message: "Merchant not found" });
+      return res.status(404).json({
+        message: "Merchant not found",
+      });
     }
 
     if (merchant.isVerified) {

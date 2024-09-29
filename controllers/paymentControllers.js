@@ -3,6 +3,7 @@ const merchantModel = require("../models/merchantModel");
 const axios = require("axios");
 const QRCode = require("qrcode");
 const sharp = require('sharp');
+const notificationModel = require("../models/notificationModel");
 require("dotenv").config();
 
 const KORAPAY_API_BASE_URL = process.env.KORAPAY_API_BASE_URL;
@@ -503,8 +504,9 @@ exports.getMerchantNotification = async (req, res) => {
       return res.status(400).json({ message: "Merchant not found!" });
     }
 
-    // Get the notification array from the merchant document
-    const notifications = merchant.notification || [];
+    // Get the notification array for the merchant
+    const notifications = await notificationModel.find({ merchant: userId });
+    if (!notifications || notifications.lenght <= 0) return res.status(404).json({ message: "No notification found!" });
 
     // Get the total number of notifications for pagination info
     const totalnotifications = notifications.length;
