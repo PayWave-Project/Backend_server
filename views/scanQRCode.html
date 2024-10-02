@@ -99,13 +99,18 @@
             margin-top: 20px;
         }
 
-        input[type="number"] {
-            width: 85%;
+        input[type="number"], input[type="text"] {
+            width: 78%;
             padding: 12px;
             border-radius: 6px;
             border: 1px solid #ccc;
             font-size: 16px;
             margin-bottom: 12px;
+        }
+
+        #amount:focus, #narration:focus {
+            border: 1.5px solid #143685;
+            outline: none;
         }
 
         button {
@@ -152,7 +157,10 @@
             main {
                 padding: 20px;
             }
-            input[type="number"], button {
+            input[type="number"], input[type="text"] {
+                width: 90%;
+            }
+            button {
                 width: 100%;
             }
         }
@@ -176,7 +184,8 @@
         </div>
         <div id="amountSection">
             <input type="number" id="amount" placeholder="Enter amount" />
-            <button id="submitAmount">Submit Amount</button>
+            <input type="text" id="narration" placeholder="Enter description" />
+            <button id="submitAmount">Proceed to Pay</button>
         </div>
         <button id="proceedToPay">Proceed to Pay</button>
         <div id="loading">Processing...</div>
@@ -216,6 +225,7 @@
 
             if (type === "static_custom") {
                 amountSection.style.display = "block";
+                proceedToPayButton.style.display = "none";
             } else {
                 fetch(`/api/v1/scan/${type}/${reference}`, { method: "GET" })
                     .then((response) => response.json())
@@ -225,6 +235,10 @@
                             qrCodeImage.style.display = "block";
                             proceedToPayButton.style.display = "block";
                             proceedToPayButton.addEventListener("click", () => {
+                                // Show the loading element
+                                loadingElement.style.display = "block";
+
+                                // Redirect to checkout URL
                                 window.location.href = data.checkoutUrl;
                             });
                         } else {
@@ -239,12 +253,13 @@
 
             document.getElementById("submitAmount").addEventListener("click", () => {
                 const amount = document.getElementById("amount").value;
-                if (amount && !isNaN(amount) && amount > 0) {
+                const narration = document.getElementById("narration").value;
+                if (amount && !isNaN(amount) && amount > 99) {
                     loadingElement.style.display = "block";
                     fetch(`/api/v1/scan/static_custom/${reference}`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ amount }),
+                        body: JSON.stringify({ amount, narration }),
                     })
                         .then((response) => response.json())
                         .then((data) => {
