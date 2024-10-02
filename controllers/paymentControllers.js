@@ -62,17 +62,18 @@ exports.generateQRCode = async (req, res) => {
 
     const paymentData = {
       amount: newPayment.amount,
-      redirect_url: "https://korapay.com",
+      redirect_url: "https://app-paywave.vercel.app",
       currency: "NGN",
       reference: newPayment.reference,
-      narration: "Payment for product Y",
+      narration: "Payment from merchant customer",
       channels: ["card", "bank_transfer", "pay_with_bank"],
       default_channel: "pay_with_bank",
       customer: { email: email },
-      notification_url: "https://paywave-api-psi.vercel.app/api/v1/webhook",
+      notification_url: "https://paywave-api-tcpl.onrender.com/api/v1/webhook",
       merchant_bears_cost: false,
       metadata: {
-        key0: "test0",
+        merchantId: merchant.merchantId,
+        merchantName: `${merchant.firstName} ${merchant.lastName}`
       },
     };
 
@@ -235,17 +236,18 @@ exports.scanStaticCustomQRCode = async (req, res) => {
       // Generate new checkout URL with the custom amount
       const paymentData = {
         amount: amount,
-        redirect_url: "https://korapay.com",
+        redirect_url: "https://app-paywave.vercel.app",
         currency: "NGN",
         reference: `PYW-${Date.now()}`,
-        narration: "Payment for product Y",
+        narration: narration ? narration : "Payment from merchant customer",
         channels: ["card", "bank_transfer", "pay_with_bank"],
         default_channel: "pay_with_bank",
         customer: { email: payment.email },
-        notification_url: "https://paywave-api-psi.vercel.app/api/v1/webhook",
+        notification_url: "https://paywave-api-tcpl.onrender.com/api/v1/webhook",
         merchant_bears_cost: false,
         metadata: {
-          key0: "test0",
+          merchantId: merchant.merchantId,
+          merchantName: `${merchant.firstName} ${merchant.lastName}`
         },
       };
 
@@ -311,17 +313,18 @@ exports.scanStaticDefinedQRCode = async (req, res) => {
     // Generate new checkout URL
     const paymentData = {
       amount: payment.amount,
-      redirect_url: "https://korapay.com",
+      redirect_url: "https://app-paywave.vercel.app",
       currency: "NGN",
       reference: `PYW-${Date.now()}`,
-      narration: "Payment for product Y",
+      narration: "Payment from merchant customer",
       channels: ["card", "bank_transfer", "pay_with_bank"],
       default_channel: "pay_with_bank",
       customer: { email: payment.email },
-      notification_url: "https://paywave-api-psi.vercel.app/api/v1/webhook",
+      notification_url: "https://paywave-api-tcpl.onrender.com/api/v1/webhook",
       merchant_bears_cost: false,
       metadata: {
-        key0: "test0",
+          merchantId: merchant.merchantId,
+          merchantName: `${merchant.firstName} ${merchant.lastName}`
       },
     };
 
