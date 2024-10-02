@@ -119,6 +119,10 @@ exports.withdrawFunds = async (req, res) => {
       return res.status(400).json({ message: "Insufficient account balance." });
     }
 
+    if (merchant.bankAccountDetails.accountNumber === beneficiaryAccountNumber && merchant.bankAccountDetails.bankCode === beneficiaryBankCode) {
+      return res.status(400).json({ message: "Forbidden! Merchant can't send funds to its own bank account!" });
+    }    
+
     const bankCode = await bankCodeModel.findOne({ code: beneficiaryBankCode });
 
     if (!bankCode && !bankCode.code) {
