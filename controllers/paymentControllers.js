@@ -238,7 +238,7 @@ exports.scanStaticCustomQRCode = async (req, res) => {
         amount: amount,
         redirect_url: "https://app-paywave.vercel.app",
         currency: "NGN",
-        reference: payment.reference,
+        reference: `PYW-${Date.now()}`,
         narration: narration ? narration : "Payment from merchant customer",
         channels: ["card", "bank_transfer", "pay_with_bank"],
         default_channel: "pay_with_bank",
@@ -266,6 +266,18 @@ exports.scanStaticCustomQRCode = async (req, res) => {
           console.error(error.response?.data || error.message);
         });
 
+        const newPayment = new paymentModel({
+          merchant: payment.merchant._id,
+          email: payment.email,
+          merchantId: payment.merchant.merchantId,
+          amount: payment.type === 'static_custom' ? 100 : amount,
+          currency: "NGN",
+          status: payment.status,
+          reference: `PYW-${Date.now()}`,
+          expiresAt: payment.expirationTime,
+          type: payment.type,
+        });
+
       const { data } = korapayResponse.data || {};
       if (!data || !data.checkout_url) {
         return res.status(500).json({
@@ -278,7 +290,7 @@ exports.scanStaticCustomQRCode = async (req, res) => {
       const { checkout_url } = data;
 
       // Update the payment document with the new checkout URL
-      payment.checkout_url = checkout_url;
+      newPayment.checkout_url = checkout_url;
       await payment.save();
 
       return res.json({ checkoutUrl: checkout_url, qrCode: payment.qrCode });
@@ -315,7 +327,7 @@ exports.scanStaticDefinedQRCode = async (req, res) => {
       amount: payment.amount,
       redirect_url: "https://app-paywave.vercel.app",
       currency: "NGN",
-      reference: payment.reference,
+      reference: `PYW-${Date.now()}`,
       narration: "Payment from merchant customer",
       channels: ["card", "bank_transfer", "pay_with_bank"],
       default_channel: "pay_with_bank",
@@ -341,6 +353,18 @@ exports.scanStaticDefinedQRCode = async (req, res) => {
       console.error(error.response?.data || error.message);
     });
 
+    const newPayment = new paymentModel({
+      merchant: payment.merchant._id,
+      email: payment.email,
+      merchantId: payment.merchant.merchantId,
+      amount: payment.type === 'static_custom' ? 100 : amount,
+      currency: "NGN",
+      status: payment.status,
+      reference: `PYW-${Date.now()}`,
+      expiresAt: payment.expirationTime,
+      type: payment.type,
+    });
+
     const { data } = korapayResponse.data || {};
     if (!data || !data.checkout_url) {
       return res.status(500).json({
@@ -353,7 +377,7 @@ exports.scanStaticDefinedQRCode = async (req, res) => {
     const { checkout_url } = data;
 
     // Update the payment document with the new checkout URL
-    payment.checkout_url = checkout_url;
+    newPayment.checkout_url = checkout_url;
     await payment.save();
 
     return res.json({ checkoutUrl: checkout_url, qrCode: payment.qrCode });
