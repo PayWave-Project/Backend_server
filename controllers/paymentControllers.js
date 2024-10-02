@@ -112,7 +112,6 @@ exports.generateQRCode = async (req, res) => {
       amount: type === 'static_custom' ? 0 : newPayment.amount,
       currency: newPayment.currency,
       status: toTitleCase(newPayment.status),
-      reference: newPayment.reference,
       expiresAt: newPayment.expiresAt,
       type: toTitleCase(newPayment.type),
     }
@@ -232,13 +231,15 @@ exports.scanStaticCustomQRCode = async (req, res) => {
       });
     }
 
+    const generatedReference = `PYW-${Date.now()}`;
+
     if (amount && !isNaN(amount) && amount > 0) {
       // Generate new checkout URL with the custom amount
       const paymentData = {
         amount: amount,
         redirect_url: "https://app-paywave.vercel.app",
         currency: "NGN",
-        reference: `PYW-${Date.now()}`,
+        reference: generatedReference,
         narration: narration ? narration : "Payment from merchant customer",
         channels: ["card", "bank_transfer", "pay_with_bank"],
         default_channel: "pay_with_bank",
@@ -273,7 +274,7 @@ exports.scanStaticCustomQRCode = async (req, res) => {
           amount: payment.type === 'static_custom' ? 100 : amount,
           currency: "NGN",
           status: payment.status,
-          reference: `PYW-${Date.now()}`,
+          reference: generatedReference,
           expiresAt: payment.expirationTime,
           type: payment.type,
         });
@@ -322,12 +323,14 @@ exports.scanStaticDefinedQRCode = async (req, res) => {
       });
     }
 
+    const generatedReference = `PYW-${Date.now()}`;
+
     // Generate new checkout URL
     const paymentData = {
       amount: payment.amount,
       redirect_url: "https://app-paywave.vercel.app",
       currency: "NGN",
-      reference: `PYW-${Date.now()}`,
+      reference: generatedReference,
       narration: "Payment from merchant customer",
       channels: ["card", "bank_transfer", "pay_with_bank"],
       default_channel: "pay_with_bank",
@@ -360,7 +363,7 @@ exports.scanStaticDefinedQRCode = async (req, res) => {
       amount: payment.type === 'static_custom' ? 100 : amount,
       currency: "NGN",
       status: payment.status,
-      reference: `PYW-${Date.now()}`,
+      reference: generatedReference,
       expiresAt: payment.expirationTime,
       type: payment.type,
     });
