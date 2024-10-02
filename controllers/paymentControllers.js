@@ -291,7 +291,7 @@ exports.scanStaticCustomQRCode = async (req, res) => {
 
       // Update the payment document with the new checkout URL
       newPayment.checkout_url = checkout_url;
-      await payment.save();
+      await newPayment.save();
 
       return res.json({ checkoutUrl: checkout_url, qrCode: payment.qrCode });
     } else {
@@ -378,7 +378,7 @@ exports.scanStaticDefinedQRCode = async (req, res) => {
 
     // Update the payment document with the new checkout URL
     newPayment.checkout_url = checkout_url;
-    await payment.save();
+    await newPayment.save();
 
     return res.json({ checkoutUrl: checkout_url, qrCode: payment.qrCode });
   } catch (error) {
