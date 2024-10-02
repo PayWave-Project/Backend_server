@@ -493,16 +493,13 @@ exports.getMerchantTransactionHistory = async (req, res) => {
     }
 
     // Get the transaction history array from the merchant document
-    const transactionHistory = merchant.transactionHistory || [];
-
-    // Sort by createdAt in descending order (most recent first)
-    const sortedTransactionHistory = transactionHistory.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const transactionHistory = merchant.transactionHistory.reverse() || [];
 
     // Get the total number of transactions for pagination info
-    const totalTransactionHistory = sortedTransactionHistory.length;
+    const totalTransactionHistory = transactionHistory.length;
 
     // Apply pagination by slicing the array
-    const paginatedTransactionHistory = sortedTransactionHistory.slice(skip, skip + limit);
+    const paginatedTransactionHistory = transactionHistory.slice(skip, skip + limit);
 
     return res.status(200).json({
       message: "Merchant transaction history retrieved successfully",
