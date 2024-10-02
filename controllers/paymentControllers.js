@@ -211,7 +211,7 @@ exports.scanStaticCustomQRCode = async (req, res) => {
 
     if (!amount) return res.status(400).json({ message: "Please input the amount you want to pay" })
 
-    const payment = await paymentModel.findOne({ reference });
+    const payment = await paymentModel.findOne({ reference }).populate('merchant');
 
     if (!payment) {
       return res.status(404).json({ message: "Payment not found" });
@@ -246,8 +246,8 @@ exports.scanStaticCustomQRCode = async (req, res) => {
         notification_url: "https://paywave-api-tcpl.onrender.com/api/v1/webhook",
         merchant_bears_cost: false,
         metadata: {
-          merchantId: merchant.merchantId,
-          merchantName: `${merchant.firstName} ${merchant.lastName}`
+          merchantId: payment.merchant.merchantId,
+          merchantName: `${payment.merchant.firstName} ${payment.merchant.lastName}`
         },
       };
 
@@ -297,7 +297,7 @@ exports.scanStaticDefinedQRCode = async (req, res) => {
   try {
     const { reference } = req.params;
 
-    const payment = await paymentModel.findOne({ reference });
+    const payment = await paymentModel.findOne({ reference }).populate('merchant');
 
     if (!payment) {
       return res.status(404).json({ message: "Payment not found" });
@@ -323,8 +323,8 @@ exports.scanStaticDefinedQRCode = async (req, res) => {
       notification_url: "https://paywave-api-tcpl.onrender.com/api/v1/webhook",
       merchant_bears_cost: false,
       metadata: {
-          merchantId: merchant.merchantId,
-          merchantName: `${merchant.firstName} ${merchant.lastName}`
+          merchantId: payment.merchant.merchantId,
+          merchantName: `${payment.merchant.firstName} ${payment.merchant.lastName}`
       },
     };
 
