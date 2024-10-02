@@ -112,7 +112,6 @@ exports.generateQRCode = async (req, res) => {
       amount: type === 'static_custom' ? 0 : newPayment.amount,
       currency: newPayment.currency,
       status: toTitleCase(newPayment.status),
-      reference: newPayment.reference,
       expiresAt: newPayment.expiresAt,
       type: toTitleCase(newPayment.type),
     }
