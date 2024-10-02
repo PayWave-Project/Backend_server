@@ -495,11 +495,14 @@ exports.getMerchantTransactionHistory = async (req, res) => {
     // Get the transaction history array from the merchant document
     const transactionHistory = merchant.transactionHistory || [];
 
+    // Sort by createdAt in descending order (most recent first)
+    const sortedTransactionHistory = transactionHistory.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
     // Get the total number of transactions for pagination info
-    const totalTransactionHistory = transactionHistory.length;
+    const totalTransactionHistory = sortedTransactionHistory.length;
 
     // Apply pagination by slicing the array
-    const paginatedTransactionHistory = transactionHistory.slice(skip, skip + limit);
+    const paginatedTransactionHistory = sortedTransactionHistory.slice(skip, skip + limit);
 
     return res.status(200).json({
       message: "Merchant transaction history retrieved successfully",
@@ -538,24 +541,24 @@ exports.getMerchantNotification = async (req, res) => {
       return res.status(400).json({ message: "Merchant not found!" });
     }
 
-    // Get the notification array for the merchant
-    const notifications = await notificationModel.find({ merchant: userId });
-    if (!notifications || notifications.lenght <= 0) return res.status(404).json({ message: "No notification found!" });
+    // Get the notification array for the merchant, sorted by createdAt in descending order
+    const notifications = await notificationModel.find({ merchant: userId }).sort({ createdAt: -1 }).skip(skip).limit(limit);
+
+    if (!notifications || notifications.length <= 0) {
+      return res.status(404).json({ message: "No notification found!" });
+    }
 
     // Get the total number of notifications for pagination info
-    const totalnotifications = notifications.length;
-
-    // Apply pagination by slicing the array
-    const paginatedNotifications = notifications.slice(skip, skip + limit);
+    const totalNotifications = await notificationModel.countDocuments({ merchant: userId });
 
     return res.status(200).json({
       message: "Merchant notifications retrieved successfully",
-      data: paginatedNotifications,
+      data: notifications,
       pagination: {
-        total: totalnotifications,
+        total: totalNotifications,
         page: page,
         limit: limit,
-        totalPages: Math.ceil(totalnotifications / limit),
+        totalPages: Math.ceil(totalNotifications / limit),
       },
     });
 
@@ -565,6 +568,7 @@ exports.getMerchantNotification = async (req, res) => {
     });
   }
 };
+
 
 
 // Function to get merchant account balance
