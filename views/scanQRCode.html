@@ -207,7 +207,7 @@
             <button id="submitAmount">Proceed to Pay</button>
         </div>
         <button id="proceedToPay">Proceed to Pay</button>
-        <p class="merchant-info">Already a merchant? Pay with your PayWave account <a href={dashboardUrl}>here</a>.</p>
+        <p class="merchant-info">Already a merchant? Pay with your PayWave account <a id="dashboardLink" href="#">here</a>.</p>
         <div id="loading">Processing...</div>
     </main>
 
@@ -247,7 +247,8 @@
             // Check if decodedData exists before constructing the URL
             if (decodedData) {
                 const dashboardUrl = `https://app-paywave.vercel.app/dashboard?merchantId=${decodedData.merchantId}`;
-                document.querySelector(".merchant-info a").href = dashboardUrl;
+                // Set the href attribute of the dashboard link
+                document.getElementById("dashboardLink").href = dashboardUrl;
             }
 
             if (type === "static_custom") {
@@ -279,6 +280,7 @@
             }
 
             document.getElementById("submitAmount").addEventListener("click", () => {
+                event.preventDefault(); // Prevent the default action
                 const amount = document.getElementById("amount").value;
                 const narration = document.getElementById("narration").value;
                 if (amount && !isNaN(amount) && amount > 99) {
