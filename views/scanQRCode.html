@@ -230,7 +230,7 @@
             let decodedData;
 
             if (encodedURIData) {
-                const decodedData = JSON.parse(decodeURIComponent(encodedURIData));
+                decodedData = JSON.parse(decodeURIComponent(encodedURIData));
                 encodedDataSection.style.display = "block";
                 encodedDataSection.innerHTML = `
                     <p><strong>Merchant ID:</strong> ${decodedData.merchantId}</p>
@@ -249,6 +249,12 @@
                 const dashboardUrl = `https://app-paywave.vercel.app/dashboard?merchantId=${decodedData.merchantId}`;
                 // Set the href attribute of the dashboard link
                 document.getElementById("dashboardLink").href = dashboardUrl;
+
+            // Add the event listener to prevent default behavior and manually redirect
+            dashboardLink.addEventListener('click', (event) => {
+            event.preventDefault(); // Prevent the default link action
+            window.location.href = dashboardUrl; // Manually redirect to the URL
+        });
             }
 
             if (type === "static_custom") {
