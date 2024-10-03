@@ -194,6 +194,7 @@ exports.scanDynamicQRCode = async (req, res) => {
     return res.json({
       checkoutUrl: payment.checkout_url,
       qrCode: payment.qrCode,
+      data: payment,
     });
   } catch (error) {
     return res.status(500).json({
@@ -294,7 +295,7 @@ exports.scanStaticCustomQRCode = async (req, res) => {
       newPayment.checkout_url = checkout_url;
       await newPayment.save();
 
-      return res.json({ checkoutUrl: checkout_url, qrCode: payment.qrCode });
+      return res.json({ checkoutUrl: checkout_url, qrCode: payment.qrCode, data: newPayment });
     } else {
       return res.status(400).json({ message: "Invalid amount provided" });
     }
@@ -383,7 +384,7 @@ exports.scanStaticDefinedQRCode = async (req, res) => {
     newPayment.checkout_url = checkout_url;
     await newPayment.save();
 
-    return res.json({ checkoutUrl: checkout_url, qrCode: payment.qrCode });
+    return res.json({ checkoutUrl: checkout_url, qrCode: payment.qrCode, data: newPayment });
   } catch (error) {
     return res.status(500).json({
       message: "Internal Server Error",
