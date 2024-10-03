@@ -135,6 +135,24 @@
             background-color: #b0b0b0;
         }
 
+        .merchant-info {
+            font-size: 14px;
+            color: #333;
+            margin-top: 15px;
+            margin-bottom: 0;
+            text-align: center;
+        }
+
+        .merchant-info a {
+            color: #143685;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        .merchant-info a:hover {
+            text-decoration: underline;
+        }
+
         #loading {
             color: #143685;
             font-weight: bold;
@@ -189,6 +207,7 @@
             <button id="submitAmount">Proceed to Pay</button>
         </div>
         <button id="proceedToPay">Proceed to Pay</button>
+        <p class="merchant-info">Already a merchant? Pay with your PayWave account <a href="https://app-paywave.vercel.app/login">here</a>.</p>
         <div id="loading">Processing...</div>
     </main>
 
