@@ -207,7 +207,7 @@
             <button id="submitAmount">Proceed to Pay</button>
         </div>
         <button id="proceedToPay">Proceed to Pay</button>
-        <p class="merchant-info">Already a merchant? Pay with your PayWave account <a href="https://app-paywave.vercel.app/login">here</a>.</p>
+        <p class="merchant-info">Already a merchant? Pay with your PayWave account <a href={dashboardUrl}>here</a>.</p>
         <div id="loading">Processing...</div>
     </main>
 
@@ -227,6 +227,8 @@
             const encodedDataSection = document.getElementById("encodedDataSection");
             const proceedToPayButton = document.getElementById("proceedToPay");
 
+            let decodedData;
+
             if (encodedURIData) {
                 const decodedData = JSON.parse(decodeURIComponent(encodedURIData));
                 encodedDataSection.style.display = "block";
@@ -240,6 +242,12 @@
                     <p><strong>Type:</strong> ${decodedData.type}</p>
                     <p><strong>Expires At:</strong> ${decodedData.expiresAt || 'N/A'}</p>
                 `;
+            }
+
+            // Check if decodedData exists before constructing the URL
+            if (decodedData) {
+                const dashboardUrl = `https://app-paywave.vercel.app/dashboard?merchantId=${decodedData.merchantId}`;
+                document.querySelector(".merchant-info a").href = dashboardUrl;
             }
 
             if (type === "static_custom") {

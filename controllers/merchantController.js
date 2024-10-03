@@ -33,6 +33,10 @@ const generateOTP = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
+const toTitleCase = (str) => {
+  return str.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+}
+
 async function createVirtualAccount(merchantDetail, merchantID,) {
   try {
 
@@ -953,6 +957,40 @@ exports.createAuthPIN = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       message: "Internal server error: " + error.message,
+    });
+  }
+};
+
+
+
+exports.getMerchant = async (req, res) => {
+  try {
+    const { merchantId } = req.params;
+    const merchant = await merchantModel.findOne({merchantId: merchantId});
+    if (!merchant) {
+      return res.status(404).json({
+        message: "Merchant not found",
+      });
+    }
+
+    const merchantDetails =  {
+      merchantId: merchant.merchantId,
+      firstName: toTitleCase(merchant.firstName),
+      lastName: toTitleCase(merchant.lastName),
+      email: merchant.email,
+      businessName: toTitleCase(merchant.businessName),
+      phoneNumber: merchant.phoneNumber,
+      AccountDetails: merchant.bankAccountDetails
+    }
+
+    return res.status(200).json({
+      message: "Merchant details successfully fetched!",
+      data: merchantDetails,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Internal Server Error: ",
+      error: error.message,
     });
   }
 };
